@@ -1,5 +1,3 @@
-!pip install nltk
-!pip install TextBlob
 import streamlit as st
 import pandas as pd
 import re
