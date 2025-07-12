@@ -1,0 +1,6 @@
+streamlit
+pandas
+nltk
+textblob
+wordcloud
+altair
