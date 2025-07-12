@@ -4,3 +4,5 @@ nltk
 textblob
 wordcloud
 altair
+openpyxl
+xlrd
