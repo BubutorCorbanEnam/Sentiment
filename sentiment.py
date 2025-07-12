@@ -85,56 +85,62 @@ if "results_df" not in st.session_state:
         "Original Comment", "Cleaned Comment", "Polarity", "Subjectivity", "Sentiment", "Opinion/Fact"
     ])
 
-# ------------------ FILE UPLOAD SECTION ------------------
-uploaded_file = st.file_uploader("📂 Upload your CSV file", type=["csv"])
+# File upload section
+uploaded_file = st.file_uploader("📂 Upload your file (CSV, Excel, or TXT)", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file is not None:
     try:
-        df = pd.read_csv(uploaded_file)
-        st.success("✅ File uploaded successfully!")
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        elif uploaded_file.name.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(uploaded_file)
+        elif uploaded_file.name.endswith(".txt"):
+            df = pd.read_csv(uploaded_file, delimiter="\t", engine='python')
+        else:
+            st.error("Unsupported file format.")
+            df = None
 
-        text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select the comment column", text_cols)
+        if df is not None:
+            st.success("✅ File uploaded successfully!")
+            text_cols = df.select_dtypes(include="object").columns.tolist()
+            selected_col = st.selectbox("Select the comment column", text_cols)
 
-        if st.button("🔎 Analyze Uploaded Comments"):
-            batch_results = []
-            for comment in df[selected_col].dropna():
-                cleaned = clean_text(comment)
-                polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
-                batch_results.append({
-                    "Original Comment": comment,
-                    "Cleaned Comment": cleaned,
-                    "Polarity": polarity,
-                    "Subjectivity": subjectivity,
-                    "Sentiment": sentiment,
-                    "Opinion/Fact": opinion_type
-                })
+            if st.button("🔎 Analyze Uploaded Comments"):
+                batch_results = []
+                for comment in df[selected_col].dropna():
+                    cleaned = clean_text(comment)
+                    polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
+                    batch_results.append({
+                        "Original Comment": comment,
+                        "Cleaned Comment": cleaned,
+                        "Polarity": polarity,
+                        "Subjectivity": subjectivity,
+                        "Sentiment": sentiment,
+                        "Opinion/Fact": opinion_type
+                    })
+                batch_df = pd.DataFrame(batch_results)
+                st.session_state.results_df = batch_df
 
-            batch_df = pd.DataFrame(batch_results)
-            st.session_state.results_df = batch_df
+                # WordCloud from all cleaned comments
+                all_text = " ".join(batch_df["Cleaned Comment"].dropna().tolist())
+                if all_text.strip():
+                    wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
+                    st.markdown("### ☁️ Word Cloud for Uploaded Comments")
+                    st.image(wordcloud.to_array(), use_container_width=True)
 
-            # WordCloud for Cleaned Comments
-            all_text = " ".join(batch_df["Cleaned Comment"].dropna().tolist())
-            if all_text.strip():
-                wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
-                st.markdown("### ☁️ Word Cloud for Uploaded Comments")
-                st.image(wordcloud.to_array(), use_container_width=True)
+                st.markdown("### ✅ Batch Analysis Results")
+                st.dataframe(batch_df)
 
-            # Display Table
-            st.markdown("### ✅ Batch Analysis Results")
-            st.dataframe(batch_df)
-
-            st.download_button(
-                "📥 Download Batch Results",
-                data=batch_df.to_csv(index=False).encode(),
-                file_name="batch_sentiment_results.csv",
-                mime="text/csv"
-            )
-
+                st.download_button(
+                    "📥 Download Batch Results",
+                    data=batch_df.to_csv(index=False).encode(),
+                    file_name="batch_sentiment_results.csv",
+                    mime="text/csv"
+                )
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error processing file: {e}")
 
-# ------------------ HISTORICAL RESULTS & VISUALIZATIONS ------------------
+# Analysis history
 if not st.session_state.results_df.empty:
     st.markdown("### 🗂️ Analysis History")
     st.dataframe(st.session_state.results_df)
@@ -146,7 +152,6 @@ if not st.session_state.results_df.empty:
         mime="text/csv"
     )
 
-    # Sentiment Distribution with colors
     st.markdown("### 📊 Sentiment Distribution")
     sentiment_counts = st.session_state.results_df['Sentiment'].value_counts().reset_index()
     sentiment_counts.columns = ['Sentiment', 'Count']
@@ -165,7 +170,6 @@ if not st.session_state.results_df.empty:
 
     st.altair_chart(bar_chart, use_container_width=True)
 
-    # Polarity vs Subjectivity Scatter Plot
     st.markdown("### 📌 Polarity vs Subjectivity")
     scatter = alt.Chart(st.session_state.results_df).mark_circle(size=70).encode(
         x='Polarity',
@@ -173,10 +177,9 @@ if not st.session_state.results_df.empty:
         color='Sentiment',
         tooltip=['Original Comment', 'Polarity', 'Subjectivity', 'Sentiment']
     ).interactive()
-
     st.altair_chart(scatter, use_container_width=True)
 
-# ------------------ MANUAL COMMENT ENTRY (FINAL) ------------------
+# Analyze single comment (last step)
 if not st.session_state.results_df.empty:
     st.markdown("---")
     st.subheader("✍️ Analyze a New Comment")
@@ -196,7 +199,7 @@ if not st.session_state.results_df.empty:
             #st.markdown(f"**Type:** {opinion_type}")
             st.markdown(f"📝 Your comment expresses a **{sentiment}** sentiment and is more **{opinion_type.lower()}-based**.")
 
-            # Append new row
+            # Append to session state
             new_row = {
                 "Original Comment": user_comment,
                 "Cleaned Comment": cleaned,
@@ -205,10 +208,10 @@ if not st.session_state.results_df.empty:
                 "Sentiment": sentiment,
                 "Opinion/Fact": opinion_type
             }
-            st.session_state.results_df = pd.concat([
-                st.session_state.results_df, pd.DataFrame([new_row])
-            ], ignore_index=True)
+            st.session_state.results_df = pd.concat(
+                [st.session_state.results_df, pd.DataFrame([new_row])],
+                ignore_index=True
+            )
 
-# ------------------ REMINDER IF NO FILE ------------------
 else:
-    st.info("⚠️ Please upload a CSV file to begin sentiment analysis.")
+    st.info("⚠️ Please upload a file to begin sentiment analysis.")
