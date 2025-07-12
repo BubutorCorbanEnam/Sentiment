@@ -118,7 +118,7 @@ if uploaded_file is not None:
             if all_text.strip():
                 wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
                 st.markdown("### ☁️ Word Cloud for Uploaded Comments")
-                st.image(wordcloud.to_array(), use_column_width=True)
+                st.image(wordcloud.to_array(), use_container_width=True)
 
             # Display Table
             st.markdown("### ✅ Batch Analysis Results")
