@@ -41,7 +41,7 @@ if user_password != PASSWORD:
     st.stop()
     
 # Download necessary NLTK data
-nltk.download('punkt_tab')
+nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
 
