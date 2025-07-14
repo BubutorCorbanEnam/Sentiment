@@ -15,6 +15,7 @@ from gensim import corpora
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from PIL import Image
+import os
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 
