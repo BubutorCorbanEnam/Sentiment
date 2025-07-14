@@ -91,21 +91,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- University Branding (Consolidated and placed after password check) ---
-# Ensure 'ucc.png' is in the same directory as your app.py for deployment
-# Added a check for the image file
-if os.path.exists("ucc.png"):
-    col1, col2 = st.columns([1, 8])
-    with col1:
-        logo = Image.open("ucc.png")
-        st.image(logo, width=80)
-    with col2:
-        st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
-        st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
-else:
+# --- University Branding ---
+col1, col2 = st.columns([1, 8])
+with col1:
+    logo = Image.open("ucc.png")  # Ensure this file is in your project directory
+    st.image(logo, width=80)
+with col2:
     st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
     st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
-    st.warning("`ucc.png` not found. Please ensure the image file is in the same directory as the script.")
 
 st.markdown("---")
 
