@@ -9,31 +9,20 @@ from nltk.stem import WordNetLemmatizer
 from textblob import TextBlob
 from wordcloud import WordCloud
 import altair as alt
-import gensim 
+import gensim
 from gensim.utils import simple_preprocess
 from gensim import corpora
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from PIL import Image
-
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
+import os # Import os for checking file existence
 
-
-# --- NLTK Downloads (Cached for efficiency) ---
-# Download necessary NLTK data
-nltk.download('punkt_tab')
-nltk.download('stopwords')
-nltk.download('wordnet')
-
-# Initialize NLTK resources once globally
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer()
-
-# --- Streamlit Page Configuration (Only once at the top) ---
+# --- Streamlit Page Configuration (Must be the first Streamlit command) ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
-# --- Custom CSS (Consolidated) ---
+# --- Custom CSS (Consolidated and placed early) ---
 st.markdown("""
     <style>
         .main {
@@ -91,14 +80,45 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- University Branding ---
-col1, col2 = st.columns([1, 8])
-with col1:
-    logo = Image.open("ucc.png")  # Ensure this file is in your project directory
-    st.image(logo, width=80)
-with col2:
+# --- NLTK Downloads (Cached for efficiency - runs only once per deployment) ---
+@st.cache_resource
+def download_nltk_data():
+    try:
+        nltk.data.find('tokenizers/punkt') # Corrected from 'punkt_tab'
+    except nltk.downloader.DownloadError:
+        nltk.download('punkt', quiet=True)
+    try:
+        nltk.data.find('corpora/stopwords')
+    except nltk.downloader.DownloadError:
+        nltk.download('stopwords', quiet=True)
+    try:
+        nltk.data.find('corpora/wordnet')
+    except nltk.downloader.DownloadError:
+        nltk.download('wordnet', quiet=True)
+    return True
+
+if not download_nltk_data():
+    st.error("Failed to download NLTK data. Please check your internet connection.")
+    st.stop()
+
+# Initialize NLTK resources once globally after download
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
+
+# --- University Branding (Consolidated and placed after initial setup) ---
+# Ensure 'ucc.png' is in the same directory as your app.py for deployment
+if os.path.exists("ucc.png"):
+    col1, col2 = st.columns([1, 8])
+    with col1:
+        logo = Image.open("ucc.png")
+        st.image(logo, width=80)
+    with col2:
+        st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
+else:
     st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
     st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
+    st.warning("`ucc.png` not found. Please ensure the image file is in the same directory as the script.")
 
 st.markdown("---")
 
@@ -110,9 +130,11 @@ if user_password != PASSWORD:
     st.warning("Please enter the correct password to continue.")
     st.stop() # Halts execution if password is incorrect
 
-# --- About Section ---
+# --- Main Header/Title (Consolidated) ---
+# This serves as the main title of the app after password entry
 st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment & Topic Analysis Web App</p></div>', unsafe_allow_html=True)
 
+# --- About Section ---
 with st.expander("ℹ️ About this App"):
     st.markdown("""
     Developed by **Bubutor Corban Enam** after participating in an NLP training session organized by **Professor Andy**.
@@ -124,11 +146,8 @@ with st.expander("ℹ️ About this App"):
     - pyLDAvis Interactive Topic Visualization
     - Supports CSV, Excel, and TXT files
     """)
-# ------------------ HEADER & LOGO ------------------
-st.image("ucc.png", use_column_width=False, width=150)
-st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment Analysis Web App</p></div>', unsafe_allow_html=True)
 
-# ------------------ TEXT PROCESSING FUNCTIONS (Defined once) ------------------
+# ------------------ TEXT PROCESSING FUNCTIONS (Defined once and cached) ------------------
 @st.cache_data # Cache the cleaning function for performance
 def clean_text(text):
     text = str(text).lower()
@@ -146,7 +165,7 @@ def analyze_sentiment(text):
     opinion_type = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion_type
 
-# --- LDA Functions (Cached for performance on repeated runs) ---
+# --- LDA Functions (Defined once and cached for performance on repeated runs) ---
 @st.cache_data
 def initialize_and_transform_dtms(df_comments):
     if df_comments.empty:
