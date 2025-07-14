@@ -9,7 +9,7 @@ from nltk.stem import WordNetLemmatizer
 from textblob import TextBlob
 from wordcloud import WordCloud
 import altair as alt
-import gensim # Uncommented this import
+import gensim 
 from gensim.utils import simple_preprocess
 from gensim import corpora
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -17,7 +17,7 @@ from sklearn.decomposition import LatentDirichletAllocation
 from PIL import Image
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
-import os # Import os for checking file existence
+
 
 # --- NLTK Downloads (Cached for efficiency) ---
 # Use st.cache_resource to download NLTK data only once per deployment
