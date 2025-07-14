@@ -15,7 +15,7 @@ from gensim import corpora
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from PIL import Image
-import os
+
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 
@@ -124,6 +124,9 @@ with st.expander("ℹ️ About this App"):
     - pyLDAvis Interactive Topic Visualization
     - Supports CSV, Excel, and TXT files
     """)
+# ------------------ HEADER & LOGO ------------------
+st.image("ucc.png", use_column_width=False, width=150)
+st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment Analysis Web App</p></div>', unsafe_allow_html=True)
 
 # ------------------ TEXT PROCESSING FUNCTIONS (Defined once) ------------------
 @st.cache_data # Cache the cleaning function for performance
