@@ -19,9 +19,6 @@ import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 import os # Import os for checking file existence
 
-# Import DownloadError explicitly
-from nltk.downloader import DownloadError # <--- ADDED THIS LINE
-
 # --- Streamlit Page Configuration (Must be the first Streamlit command) ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
@@ -88,15 +85,15 @@ st.markdown("""
 def download_nltk_data():
     try:
         nltk.data.find('tokenizers/punkt')
-    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
+    except Exception:
         nltk.download('punkt', quiet=True)
     try:
         nltk.data.find('corpora/stopwords')
-    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
+    except Exception:
         nltk.download('stopwords', quiet=True)
     try:
         nltk.data.find('corpora/wordnet')
-    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
+    except Exception:
         nltk.download('wordnet', quiet=True)
     return True
 
@@ -108,7 +105,7 @@ if not download_nltk_data():
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# --- University Branding (Consolidated and placed after initial setup) ---
+# --- University Branding ---
 # Ensure 'ucc.png' is in the same directory as your app.py for deployment
 if os.path.exists("ucc.png"):
     col1, col2 = st.columns([1, 8])
@@ -124,6 +121,7 @@ else:
     st.warning("`ucc.png` not found. Please ensure the image file is in the same directory as the script.")
 
 st.markdown("---")
+
 
 # --- Password Protection ---
 PASSWORD = "CORBAN"  # Change this as needed
