@@ -27,7 +27,7 @@ with col2:
 st.markdown("---")
 
 # --- Password Protection ---
-PASSWORD = "CORBAN"  # Change this as needed
+PASSWORD = "JOE"  # Change this as needed
 user_password = st.text_input("🔒 Enter Password to Access the App:", type="password")
 
 if user_password != PASSWORD:
