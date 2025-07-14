@@ -9,7 +9,7 @@ from nltk.stem import WordNetLemmatizer
 from textblob import TextBlob
 from wordcloud import WordCloud
 import altair as alt
-import gensim
+#import gensim
 from gensim.utils import simple_preprocess
 from gensim import corpora
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
