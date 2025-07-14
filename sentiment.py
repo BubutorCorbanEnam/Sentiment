@@ -19,6 +19,9 @@ import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
 import os # Import os for checking file existence
 
+# Import DownloadError explicitly
+from nltk.downloader import DownloadError # <--- ADDED THIS LINE
+
 # --- Streamlit Page Configuration (Must be the first Streamlit command) ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
@@ -84,16 +87,16 @@ st.markdown("""
 @st.cache_resource
 def download_nltk_data():
     try:
-        nltk.data.find('tokenizers/punkt') # Corrected from 'punkt_tab'
-    except nltk.downloader.DownloadError:
+        nltk.data.find('tokenizers/punkt')
+    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
         nltk.download('punkt', quiet=True)
     try:
         nltk.data.find('corpora/stopwords')
-    except nltk.downloader.DownloadError:
+    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
         nltk.download('stopwords', quiet=True)
     try:
         nltk.data.find('corpora/wordnet')
-    except nltk.downloader.DownloadError:
+    except DownloadError: # <--- CHANGED TO USE DIRECT IMPORT
         nltk.download('wordnet', quiet=True)
     return True
 
@@ -449,4 +452,3 @@ if st.button("🔍 Analyze My Comment", key="analyze_single_comment_button"):
 # Initial message if no data is present at all
 if st.session_state.results_df.empty and uploaded_file is None:
     st.info("Upload a file or type a comment to begin sentiment analysis.")
-
