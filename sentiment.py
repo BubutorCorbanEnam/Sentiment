@@ -392,6 +392,15 @@ if not st.session_state.results_df.empty:
                         top_features = [tf_feature_names[i] for i in top_features_ind]
                         st.write(f"**Topic {topic_idx+1}:**", ", ".join(top_features))
 
+                    # Add pyLDAvis for Sklearn LDA
+                    st.markdown("#### 📈 Interactive Topic Visualization (Sklearn LDA - TF)")
+                    with st.spinner("Generating pyLDAvis visualization for Sklearn LDA..."):
+                        # pyLDAvis.sklearn.prepare requires the LDA model, the DTM, and the vectorizer
+                        vis_data_sklearn = pyLDAvis.sklearn.prepare(lda_tf, dtm_tf, tf_vectorizer, mds='tsne')
+                        html_string_sklearn = pyLDAvis.prepared_data_to_html(vis_data_sklearn)
+                        st.components.v1.html(html_string_sklearn, width=1000, height=800, scrolling=True)
+
+
                     # Gensim LDA + pyLDAvis
                     comment_words = prepare_text_for_gensim(cleaned_comments_for_lda.tolist())
                     id2word, corpus = create_gensim_corpus(comment_words)
@@ -400,10 +409,11 @@ if not st.session_state.results_df.empty:
                         lda_model_gensim, doc_lda = train_gensim_lda_model(corpus, id2word, num_topics=num_topics)
 
                         if lda_model_gensim:
-                            with st.spinner("Generating pyLDAvis visualization..."):
-                                vis_data = gensimvis.prepare(lda_model_gensim, corpus, id2word)
-                                html_string = pyLDAvis.prepared_data_to_html(vis_data)
-                                st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+                            st.markdown("#### 📈 Interactive Topic Visualization (Gensim LDA)")
+                            with st.spinner("Generating pyLDAvis visualization for Gensim LDA..."):
+                                vis_data_gensim = gensimvis.prepare(lda_model_gensim, corpus, id2word)
+                                html_string_gensim = pyLDAvis.prepared_data_to_html(vis_data_gensim)
+                                st.components.v1.html(html_string_gensim, width=1000, height=800, scrolling=True)
                         else:
                             st.warning("Gensim LDA model could not be trained. Check data quality or number of topics.")
                     else:
