@@ -9,6 +9,31 @@ from textblob import TextBlob
 from wordcloud import WordCloud
 import altair as alt
 
+from PIL import Image
+import io
+
+# --- Setup ---
+st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
+
+# --- University Branding ---
+col1, col2 = st.columns([1, 8])
+with col1:
+    logo = Image.open("ucc.png")  # Ensure this file is in your project directory
+    st.image(logo, width=80)
+with col2:
+    st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# --- Password Protection ---
+PASSWORD = "CORBAN"  # Change this as needed
+user_password = st.text_input("🔒 Enter Password to Access the App:", type="password")
+
+if user_password != PASSWORD:
+    st.warning("Please enter the correct password to continue.")
+    st.stop()
+    
 # Download necessary NLTK data
 nltk.download('punkt_tab')
 nltk.download('stopwords')
