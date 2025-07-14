@@ -93,7 +93,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------ HEADER & LOGO ------------------
-st.image("ucc.png", use_container_width=False, width=150)
+st.markdown(
+    """
+    <div style="display: flex; justify-content: center;">
+        <img src="ucc.png" width="150">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment Analysis Web App</p></div>', unsafe_allow_html=True)
 
 # ------------------ PROFESSIONAL BACKGROUND ------------------
