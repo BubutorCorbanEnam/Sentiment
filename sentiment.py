@@ -20,26 +20,10 @@ import pyLDAvis
 
 
 # --- NLTK Downloads (Cached for efficiency) ---
-# Use st.cache_resource to download NLTK data only once per deployment
-@st.cache_resource
-def download_nltk_data():
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except nltk.downloader.DownloadError:
-        nltk.download('punkt_tab', quiet=True)
-    try:
-        nltk.data.find('corpora/stopwords')
-    except nltk.downloader.DownloadError:
-        nltk.download('stopwords', quiet=True)
-    try:
-        nltk.data.find('corpora/wordnet')
-    except nltk.downloader.DownloadError:
-        nltk.download('wordnet', quiet=True)
-    return True
-
-if not download_nltk_data():
-    st.error("Failed to download NLTK data. Please check your internet connection.")
-    st.stop()
+# Download necessary NLTK data
+nltk.download('punkt_tab')
+nltk.download('stopwords')
+nltk.download('wordnet')
 
 # Initialize NLTK resources once globally
 stop_words = set(stopwords.words('english'))
