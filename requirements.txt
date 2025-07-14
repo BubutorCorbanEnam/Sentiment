@@ -1,8 +1,10 @@
-streamlit
-pandas
-nltk
-textblob
+pyLDAvis
+gensim
+scikit-learn
 wordcloud
 altair
+nltk
+textblob
+pandas
 openpyxl
 xlrd
