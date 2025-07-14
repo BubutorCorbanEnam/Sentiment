@@ -94,17 +94,10 @@ st.markdown("""
 
 # ------------------ HEADER & LOGO ------------------
 # First logo (left side)
-st.image("ucc.png", width=80)
+st.image("ucc.png", width=120)
 
 # Second logo (centered one)
-st.markdown(
-    """
-    <div style="display: flex; justify-content: center;">
-        <img src="ucc.png" width="150">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+
 
 st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment Analysis Web App</p></div>', unsafe_allow_html=True)
 
