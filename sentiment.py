@@ -21,7 +21,7 @@ import pyLDAvis.gensim_models as gensimvis
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="wide", page_icon="💬")
 
 # Download NLTK resources
-nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 
@@ -47,7 +47,7 @@ if user_password != PASSWORD:
 
 st.title("University of Cape Coast - Sentiment & Topic Analysis Portal")
 
-# ---- Initialize session state ----
+# ---- Session State ----
 if "results_df" not in st.session_state:
     st.session_state.results_df = pd.DataFrame(columns=["Original", "Cleaned", "Polarity", "Subjectivity", "Sentiment", "Type"])
 
@@ -124,7 +124,7 @@ if uploaded_file:
                 wc_image = generate_wordcloud(all_text)
                 st.image(wc_image.to_array(), caption="Word Cloud", use_column_width=True)
             else:
-                st.warning("Not enough text for WordCloud. Please check your input.")
+                st.warning("Not enough text for WordCloud.")
 
             # ---- Sentiment Distribution ----
             st.subheader("📊 Sentiment Distribution")
@@ -138,16 +138,29 @@ if uploaded_file:
             ).properties(width=600)
             st.altair_chart(chart)
 
+            # ---- Scatter Plot ----
+            st.subheader("📌 Polarity vs Subjectivity")
+            scatter = alt.Chart(results_df).mark_circle(size=70).encode(
+                x='Polarity',
+                y='Subjectivity',
+                color='Sentiment',
+                tooltip=['Original', 'Polarity', 'Subjectivity', 'Sentiment']
+            ).interactive()
+            st.altair_chart(scatter, use_container_width=True)
+
             # ---- LDA ----
             st.subheader("🧠 Topic Modeling (LDA)")
             num_topics = st.slider("Number of Topics", 3, 15, 5)
             lda_model, dictionary, corpus = prepare_gensim_lda(results_df["Cleaned"].tolist(), num_topics)
 
-            st.markdown("**LDA Dictionary (token2id):**")
+            st.markdown("**📖 LDA Dictionary (token2id)** - Table View")
             dict_df = pd.DataFrame(list(dictionary.token2id.items()), columns=["Token", "ID"])
             st.dataframe(dict_df)
 
-            st.markdown("**Top Words per Topic:**")
+            st.markdown("**🔧 Exact Dictionary (Python dict):**")
+            st.code(dictionary.token2id)
+
+            st.markdown("**🔖 Top Words per Topic:**")
             for idx, topic in lda_model.show_topics(formatted=False):
                 words = ", ".join([w[0] for w in topic])
                 st.write(f"**Topic {idx+1}:** {words}")
