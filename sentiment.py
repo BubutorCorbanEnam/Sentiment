@@ -100,7 +100,7 @@ if uploaded_file:
         text_cols = df.select_dtypes(include="object").columns.tolist()
         selected_col = st.selectbox("Select Text Column", text_cols)
 
-        if st.button("🔍 Run Analysis"):
+        if st.button("🔍 Run Sentiment Analysis"):
             results = []
             for comment in df[selected_col].dropna():
                 cleaned = clean_text(comment)
@@ -115,7 +115,7 @@ if uploaded_file:
                 })
 
             results_df = pd.DataFrame(results)
-            st.subheader("🗂️ Analysis Results")
+            st.subheader("🗂️ Sentiment Analysis Results")
             st.dataframe(results_df)
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
@@ -164,19 +164,19 @@ if uploaded_file:
                 max_possible_topics = min(15, len(processed_texts), len(id2word))
                 num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, 5)
 
-                # Use exactly the selected number of topics
-                lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                if st.button("🚀 Run LDA Analysis"):
+                    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-                st.markdown("**LDA Topics:**")
-                for idx, topic in lda_model.print_topics():
-                    st.write(f"**Topic {idx+1}:** {topic}")
+                    st.markdown("**LDA Topics:**")
+                    for idx, topic in lda_model.print_topics():
+                        st.write(f"**Topic {idx+1}:** {topic}")
 
-                # ------------------ pyLDAvis ------------------
-                st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                with st.spinner("Generating visualization..."):
-                    vis = gensimvis.prepare(lda_model, corpus, id2word)
-                    html_string = pyLDAvis.prepared_data_to_html(vis)
-                    st.components.v1.html(html_string, width=1000, height=800)
+                    # ------------------ pyLDAvis ------------------
+                    st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                    with st.spinner("Generating visualization..."):
+                        vis = gensimvis.prepare(lda_model, corpus, id2word)
+                        html_string = pyLDAvis.prepared_data_to_html(vis)
+                        st.components.v1.html(html_string, width=1000, height=800)
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
