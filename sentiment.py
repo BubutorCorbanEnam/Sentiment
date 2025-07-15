@@ -48,7 +48,6 @@ if user_password != PASSWORD:
 st.title("University of Cape Coast - Sentiment & Topic Analysis Portal")
 
 # Text Cleaning Function
-@st.cache_data
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -56,8 +55,6 @@ def clean_text(text):
     tokens = [lemmatizer.lemmatize(w) for w in tokens if w not in stop_words and len(w) > 1]
     return " ".join(tokens)
 
-# Sentiment Analysis Function
-@st.cache_data
 def analyze_sentiment(text):
     blob = TextBlob(text)
     polarity = round(blob.sentiment.polarity, 3)
@@ -66,20 +63,49 @@ def analyze_sentiment(text):
     opinion_type = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion_type
 
+
 # Word Cloud Function
-@st.cache_data
-def generate_wordcloud(text_data):
+st.header("☁️ Word Cloud")
+
+all_cleaned_text = " ".join(st.session_state.results_df["Cleaned Comment"].dropna().tolist())
+
+if len(all_cleaned_text) > 0:
     wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
-    return wc.generate(text_data)
+    wordcloud = wc.generate(all_cleaned_text)
+    st.image(wordcloud.to_array(), use_container_width=True)
+else:
+    st.warning("Not enough text for WordCloud. Please check your input.")
 
 # LDA Preparation
-@st.cache_data
-def prepare_gensim_lda(texts, num_topics=5):
-    processed = [simple_preprocess(doc, deacc=True) for doc in texts]
-    dictionary = corpora.Dictionary(processed)
-    corpus = [dictionary.doc2bow(text) for text in processed]
-    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=dictionary, num_topics=num_topics, passes=10)
-    return lda_model, dictionary, corpus
+st.header("🧠 Topic Modeling (LDA)")
+
+comments = st.session_state.results_df["Cleaned Comment"].dropna().tolist()
+
+if len(comments) > 0:
+    tokenized = [simple_preprocess(doc) for doc in comments]
+    id2word = corpora.Dictionary(tokenized)
+    corpus = [id2word.doc2bow(text) for text in tokenized]
+
+    # Show the dictionary (token2id mapping)
+    st.subheader("📖 Gensim Dictionary (token2id)")
+    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
+    st.dataframe(dict_df)
+
+    # LDA Model
+    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=id2word, num_topics=5, random_state=42, passes=10)
+
+    # Show Top Topics
+    st.subheader("🔖 Topics Discovered:")
+    for idx, topic in lda_model.show_topics(num_topics=5, formatted=True):
+        st.write(f"**Topic {idx+1}:** {topic}")
+
+    # pyLDAvis
+    st.subheader("📈 pyLDAvis Interactive Visualization")
+    vis = gensimvis.prepare(lda_model, corpus, id2word)
+    html_string = pyLDAvis.prepared_data_to_html(vis)
+    st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+else:
+    st.warning("No comments available for LDA modeling.")
 
 # File Upload
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
