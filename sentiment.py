@@ -29,7 +29,7 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# UI Branding
+# ---- Custom CSS ----
 st.markdown("""
     <style>
         .main { background-color: #f4f6f9; }
@@ -38,7 +38,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Password Protection
+# ---- Password ----
 PASSWORD = "CORBAN"
 user_password = st.text_input("🔒 Enter Password:", type="password")
 if user_password != PASSWORD:
@@ -47,7 +47,11 @@ if user_password != PASSWORD:
 
 st.title("University of Cape Coast - Sentiment & Topic Analysis Portal")
 
-# Text Cleaning Function
+# ---- Initialize session state ----
+if "results_df" not in st.session_state:
+    st.session_state.results_df = pd.DataFrame(columns=["Original", "Cleaned", "Polarity", "Subjectivity", "Sentiment", "Type"])
+
+# ---- Functions ----
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -63,51 +67,18 @@ def analyze_sentiment(text):
     opinion_type = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion_type
 
-
-# Word Cloud Function
-st.header("☁️ Word Cloud")
-
-all_cleaned_text = " ".join(st.session_state.results_df["Cleaned Comment"].dropna().tolist())
-
-if len(all_cleaned_text) > 0:
+def generate_wordcloud(text):
     wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
-    wordcloud = wc.generate(all_cleaned_text)
-    st.image(wordcloud.to_array(), use_container_width=True)
-else:
-    st.warning("Not enough text for WordCloud. Please check your input.")
+    return wc.generate(text)
 
-# LDA Preparation
-st.header("🧠 Topic Modeling (LDA)")
+def prepare_gensim_lda(texts, num_topics=5):
+    tokenized = [simple_preprocess(doc) for doc in texts]
+    dictionary = corpora.Dictionary(tokenized)
+    corpus = [dictionary.doc2bow(text) for text in tokenized]
+    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=dictionary, num_topics=num_topics, random_state=42, passes=10)
+    return lda_model, dictionary, corpus
 
-comments = st.session_state.results_df["Cleaned Comment"].dropna().tolist()
-
-if len(comments) > 0:
-    tokenized = [simple_preprocess(doc) for doc in comments]
-    id2word = corpora.Dictionary(tokenized)
-    corpus = [id2word.doc2bow(text) for text in tokenized]
-
-    # Show the dictionary (token2id mapping)
-    st.subheader("📖 Gensim Dictionary (token2id)")
-    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
-    st.dataframe(dict_df)
-
-    # LDA Model
-    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=id2word, num_topics=5, random_state=42, passes=10)
-
-    # Show Top Topics
-    st.subheader("🔖 Topics Discovered:")
-    for idx, topic in lda_model.show_topics(num_topics=5, formatted=True):
-        st.write(f"**Topic {idx+1}:** {topic}")
-
-    # pyLDAvis
-    st.subheader("📈 pyLDAvis Interactive Visualization")
-    vis = gensimvis.prepare(lda_model, corpus, id2word)
-    html_string = pyLDAvis.prepared_data_to_html(vis)
-    st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
-else:
-    st.warning("No comments available for LDA modeling.")
-
-# File Upload
+# ---- File Upload ----
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
@@ -139,40 +110,49 @@ if uploaded_file:
                     "Type": opinion
                 })
             results_df = pd.DataFrame(results)
+            st.session_state.results_df = results_df
+
+            st.subheader("🗂️ Analysis Results")
             st.dataframe(results_df)
 
             st.download_button("📥 Download Results", data=results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # Word Cloud Display
+            # ---- WordCloud ----
+            st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
-            wc_image = generate_wordcloud(all_text)
-            st.image(wc_image.to_array(), caption="Word Cloud", use_column_width=True)
+            if len(all_text.strip()) > 0:
+                wc_image = generate_wordcloud(all_text)
+                st.image(wc_image.to_array(), caption="Word Cloud", use_column_width=True)
+            else:
+                st.warning("Not enough text for WordCloud. Please check your input.")
 
-            # Sentiment Distribution
+            # ---- Sentiment Distribution ----
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
+            counts.columns = ["Sentiment", "Count"]
             chart = alt.Chart(counts).mark_bar().encode(
-                x='index',
-                y='Sentiment',
-                color='index',
-                tooltip=['index', 'Sentiment']
+                x='Sentiment',
+                y='Count',
+                color='Sentiment',
+                tooltip=['Sentiment', 'Count']
             ).properties(width=600)
             st.altair_chart(chart)
 
-            # Topic Modeling (LDA)
-            st.subheader("🧠 LDA Topic Modeling")
+            # ---- LDA ----
+            st.subheader("🧠 Topic Modeling (LDA)")
             num_topics = st.slider("Number of Topics", 3, 15, 5)
             lda_model, dictionary, corpus = prepare_gensim_lda(results_df["Cleaned"].tolist(), num_topics)
 
-            st.markdown("**LDA Topic Dictionary:**")
-            st.write(dictionary.token2id)
+            st.markdown("**LDA Dictionary (token2id):**")
+            dict_df = pd.DataFrame(list(dictionary.token2id.items()), columns=["Token", "ID"])
+            st.dataframe(dict_df)
 
             st.markdown("**Top Words per Topic:**")
             for idx, topic in lda_model.show_topics(formatted=False):
                 words = ", ".join([w[0] for w in topic])
                 st.write(f"**Topic {idx+1}:** {words}")
 
-            # Interactive Visualization
+            # ---- pyLDAvis ----
             with st.spinner("Generating pyLDAvis visualization..."):
                 vis_data = gensimvis.prepare(lda_model, corpus, dictionary)
                 html = pyLDAvis.prepared_data_to_html(vis_data)
