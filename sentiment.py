@@ -152,23 +152,26 @@ if uploaded_file:
             ).interactive().properties(width=700)
             st.altair_chart(scatter_chart)
 
-            # ------------------ LDA Topic Modeling ------------------
-            st.subheader("🧠 Topic Modeling (LDA)")
-            num_topics = st.slider("Select Number of Topics", 3, 15, 5)
-            processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
-            id2word = corpora.Dictionary(processed_texts)
-            corpus = [id2word.doc2bow(text) for text in processed_texts]
+            # --- LDA Topic Modeling ---
+st.subheader("🧠 Topic Modeling (LDA)")
 
-            if len(corpus) > 5000:
-                st.warning("⚠️ Dataset too large for Streamlit Cloud LDA. Please use fewer rows.")
-                st.stop()
+# Ensure there's enough data
+if len(processed_texts) < 3:
+    st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
+else:
+    max_possible_topics = min(15, len(processed_texts), len(id2word))
+    num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
 
-            with st.spinner("Training LDA model... This may take up to 20 seconds"):
-                lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-            st.markdown("**LDA Topics:**")
-            for idx, topic in lda_model.print_topics():
-                st.write(f"**Topic {idx+1}:** {topic}")
+    st.markdown("**LDA Dictionary (token2id mapping):**")
+    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
+    st.dataframe(dict_df)
+
+    st.markdown("**LDA Topics:**")
+    for idx, topic in lda_model.print_topics():
+        st.write(f"**Topic {idx+1}:** {topic}")
+
 
             # ------------------ pyLDAvis Interactive ------------------
             st.subheader("📈 Interactive LDA Visualization")
