@@ -65,17 +65,16 @@ def prepare_gensim_data(texts):
     ]
     return processed_texts
 
-@st.cache_resource(show_spinner=False)
-def train_gensim_lda_model(corpus, id2word, num_topics=10):
+@st.cache_resource
+def train_gensim_lda_model(corpus, _id2word, num_topics=10):
     lda_model = gensim.models.LdaMulticore(
         corpus=corpus,
-        id2word=id2word,
+        id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
-        passes=30,           # More passes for better convergence
-        iterations=300,      # More iterations
-        chunksize=50,        # Mini-batches for speed
-        workers=4,           # Multicore processing
+        passes=30,
+        iterations=200,
+        chunksize=50,
         per_word_topics=True
     )
     return lda_model
