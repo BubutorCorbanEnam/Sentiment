@@ -188,15 +188,15 @@ def initialize_and_transform_dtms(df_comments):
     return tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf
 
 @st.cache_data
-def train_sklearn_lda_models(dtm_tf, dtm_tfidf, n_components=10, random_state=50):
-    if dtm_tf is None or dtm_tfidf is None:
+def train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=10, random_state=50): # <--- ADDED UNDERSCORES
+    if _dtm_tf is None or _dtm_tfidf is None:
         return None, None
 
     lda_tf = LatentDirichletAllocation(n_components=n_components, random_state=random_state)
-    lda_tf.fit(dtm_tf)
+    lda_tf.fit(_dtm_tf)
 
     lda_tfidf = LatentDirichletAllocation(n_components=n_components, random_state=random_state)
-    lda_tfidf.fit(dtm_tfidf)
+    lda_tfidf.fit(_dtm_tfidf)
 
     return lda_tf, lda_tfidf
 
@@ -229,19 +229,19 @@ def create_gensim_corpus(comment_words):
     return id2word, corpus
 
 @st.cache_data
-def train_gensim_lda_model(corpus, id2word, num_topics=10):
-    if corpus is None or id2word is None or not corpus:
+def train_gensim_lda_model(_corpus, _id2word, num_topics=10): # <--- ADDED UNDERSCORES
+    if _corpus is None or _id2word is None or not _corpus:
         return None, None
 
     lda_model = gensim.models.LdaMulticore(
-        corpus=corpus,
-        id2word=id2word,
+        corpus=_corpus,
+        id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
         passes=10,
         per_word_topics=True
     )
-    return lda_model, lda_model[corpus]
+    return lda_model, lda_model[_corpus]
 
 # --- Session State Initialization ---
 if "results_df" not in st.session_state:
@@ -383,6 +383,7 @@ if not st.session_state.results_df.empty:
                 tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf = initialize_and_transform_dtms(cleaned_comments_for_lda)
 
                 if dtm_tf is not None and dtm_tfidf is not None:
+                    # Pass dtm_tf and dtm_tfidf with underscores to train_sklearn_lda_models
                     lda_tf, lda_tfidf = train_sklearn_lda_models(dtm_tf, dtm_tfidf, n_components=num_topics)
 
                     st.markdown("#### 🔖 Top Words per Topic (TF DTM):")
@@ -403,9 +404,11 @@ if not st.session_state.results_df.empty:
 
                     # Gensim LDA + pyLDAvis
                     comment_words = prepare_text_for_gensim(cleaned_comments_for_lda.tolist())
+                    # Pass comment_words to create_gensim_corpus
                     id2word, corpus = create_gensim_corpus(comment_words)
 
                     if corpus is not None and id2word is not None and corpus: # Check if corpus is not empty
+                        # Pass corpus and id2word with underscores to train_gensim_lda_model
                         lda_model_gensim, doc_lda = train_gensim_lda_model(corpus, id2word, num_topics=num_topics)
 
                         if lda_model_gensim:
