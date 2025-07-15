@@ -17,20 +17,16 @@ from sklearn.decomposition import LatentDirichletAllocation
 from PIL import Image
 import pyLDAvis.gensim_models as gensimvis
 import pyLDAvis
-import os # Import os for checking file existence
+import os
 
-# --- Streamlit Page Configuration (Must be the first Streamlit command) ---
+# --- Streamlit Page Configuration ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
-# --- Custom CSS (Consolidated and placed early) ---
+# --- Custom CSS ---
 st.markdown("""
     <style>
-        .main {
-            background-color: #f4f6f9;
-        }
-        h1, h2, h3, h4 {
-            color: #002147; /* Dark blue for headers */
-        }
+        .main { background-color: #f4f6f9; }
+        h1, h2, h3, h4 { color: #002147; }
         .university-header {
             background-color: #002147;
             color: white;
@@ -39,74 +35,40 @@ st.markdown("""
             margin-bottom: 1rem;
             text-align: center;
         }
-        .stButton>button {
-            background-color: #002147;
-            color: white;
+        .stButton>button, .stDownloadButton>button {
             border-radius: 8px;
             font-size: 16px;
             padding: 10px 20px;
             border: none;
             cursor: pointer;
-            transition: background-color 0.3s ease;
         }
-        .stButton>button:hover {
-            background-color: #0E4D92; /* Lighter blue on hover */
-        }
-        .stDownloadButton>button {
-            background-color: #FFD700; /* Gold */
-            color: black;
-            border-radius: 8px;
-            font-size: 16px;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .stDownloadButton>button:hover {
-            background-color: #E6C200; /* Darker gold on hover */
-        }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea {
+        .stButton>button { background-color: #002147; color: white; }
+        .stButton>button:hover { background-color: #0E4D92; }
+        .stDownloadButton>button { background-color: #FFD700; color: black; }
+        .stDownloadButton>button:hover { background-color: #E6C200; }
+        .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div>div {
             border-radius: 8px;
             border: 1px solid #ccc;
-            padding: 10px;
-        }
-        .stSelectbox>div>div>div {
-            border-radius: 8px;
-            border: 1px solid #ccc;
-        }
-        .stAlert {
-            border-radius: 8px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- NLTK Downloads (Cached for efficiency - runs only once per deployment) ---
+# --- NLTK Downloads ---
 @st.cache_resource
 def download_nltk_data():
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except Exception:
-        nltk.download('punkt', quiet=True)
-    try:
-        nltk.data.find('corpora/stopwords')
-    except Exception:
-        nltk.download('stopwords', quiet=True)
-    try:
-        nltk.data.find('corpora/wordnet')
-    except Exception:
-        nltk.download('wordnet', quiet=True)
+    for item in ['punkt', 'stopwords', 'wordnet']:
+        try:
+            nltk.data.find(f'tokenizers/{item}' if item == 'punkt' else f'corpora/{item}')
+        except LookupError:
+            nltk.download(item)
     return True
 
-if not download_nltk_data():
-    st.error("Failed to download NLTK data. Please check your internet connection.")
-    st.stop()
+download_nltk_data()
 
-# Initialize NLTK resources once globally after download
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
 # --- University Branding ---
-# Ensure 'ucc.png' is in the same directory as your app.py for deployment
 if os.path.exists("ucc.png"):
     col1, col2 = st.columns([1, 8])
     with col1:
@@ -122,24 +84,20 @@ else:
 
 st.markdown("---")
 
-
 # --- Password Protection ---
-PASSWORD = "CORBAN"  # Change this as needed
+PASSWORD = "CORBAN"
 user_password = st.text_input("🔒 Enter Password to Access the App:", type="password")
-
 if user_password != PASSWORD:
     st.warning("Please enter the correct password to continue.")
-    st.stop() # Halts execution if password is incorrect
+    st.stop()
 
-# --- Main Header/Title (Consolidated) ---
-# This serves as the main title of the app after password entry
 st.markdown('<div class="university-header"><h2>University of Cape Coast</h2><p>Sentiment & Topic Analysis Web App</p></div>', unsafe_allow_html=True)
 
 # --- About Section ---
 with st.expander("ℹ️ About this App"):
     st.markdown("""
     Developed by **Bubutor Corban Enam** after participating in an NLP training session organized by **Professor Andy**.
-
+    
     **Features:**
     - Sentiment Analysis (Polarity, Subjectivity, Opinion/Fact)
     - WordCloud Visualization
@@ -148,16 +106,14 @@ with st.expander("ℹ️ About this App"):
     - Supports CSV, Excel, and TXT files
     """)
 
-# ------------------ TEXT PROCESSING FUNCTIONS (Defined once and cached) ------------------
-@st.cache_data # Cache the cleaning function for performance
+# --- Text Processing Functions ---
+@st.cache_data
 def clean_text(text):
-    text = str(text).lower()
-    text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
-    tokens = word_tokenize(text)
-    tokens = [lemmatizer.lemmatize(w) for w in tokens if w not in stop_words and len(w) > 1]
+    text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-zA-Z\s]", "", str(text).lower())
+    tokens = [lemmatizer.lemmatize(w) for w in word_tokenize(text) if w not in stop_words and len(w) > 1]
     return " ".join(tokens)
 
-@st.cache_data # Cache the sentiment analysis function
+@st.cache_data
 def analyze_sentiment(text):
     blob = TextBlob(text)
     polarity = round(blob.sentiment.polarity, 3)
@@ -166,301 +122,136 @@ def analyze_sentiment(text):
     opinion_type = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion_type
 
-# --- LDA Functions (Defined once and cached for performance on repeated runs) ---
+# --- LDA Utility Functions ---
 @st.cache_data
 def initialize_and_transform_dtms(df_comments):
-    if df_comments.empty:
-        return None, None, None, None
-
-    tf_vectorizer = CountVectorizer(
-        strip_accents='unicode',
-        stop_words='english',
-        lowercase=True,
-        token_pattern=r'\b[a-zA-Z]{3,}\b',
-        max_df=0.5,
-        min_df=10
-    )
-    _dtm_tf = tf_vectorizer.fit_transform(df_comments.values.astype('U')) # Renamed output to _dtm_tf
-
+    tf_vectorizer = CountVectorizer(strip_accents='unicode', stop_words='english', lowercase=True,
+                                     token_pattern=r'\b[a-zA-Z]{3,}\b', max_df=0.5, min_df=10)
+    dtm_tf = tf_vectorizer.fit_transform(df_comments.values.astype('U'))
     tfidf_vectorizer = TfidfVectorizer(**tf_vectorizer.get_params())
-    _dtm_tfidf = tfidf_vectorizer.fit_transform(df_comments.values.astype('U')) # Renamed output to _dtm_tfidf
-
-    return tf_vectorizer, _dtm_tf, tfidf_vectorizer, _dtm_tfidf
+    dtm_tfidf = tfidf_vectorizer.fit_transform(df_comments.values.astype('U'))
+    return tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf
 
 @st.cache_data
-def train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=10, random_state=50):
-    if _dtm_tf is None or _dtm_tfidf is None:
-        return None, None
-
-    lda_tf = LatentDirichletAllocation(n_components=n_components, random_state=random_state)
-    lda_tf.fit(_dtm_tf)
-
-    lda_tfidf = LatentDirichletAllocation(n_components=n_components, random_state=random_state)
-    lda_tfidf.fit(_dtm_tfidf)
-
+def train_sklearn_lda_models(dtm_tf, dtm_tfidf, n_components=10, random_state=50):
+    lda_tf = LatentDirichletAllocation(n_components=n_components, random_state=random_state).fit(dtm_tf)
+    lda_tfidf = LatentDirichletAllocation(n_components=n_components, random_state=random_state).fit(dtm_tfidf)
     return lda_tf, lda_tfidf
 
 @st.cache_data
 def prepare_text_for_gensim(comments_list):
-    if not comments_list:
-        return []
-
-    extra_stopwords = ['from', 'subject', 're', 'edu', 'use']
-    all_stopwords = stopwords.words('english') + extra_stopwords
-
-    def sentences_to_words_generator(sentences):
-        for sentence in sentences:
-            yield(simple_preprocess(str(sentence), deacc=True))
-
-    def remove_custom_stopwords(texts, custom_stopwords):
-        return [[word for word in simple_preprocess(str(doc)) if word not in custom_stopwords] for doc in texts]
-
-    comment_words = list(sentences_to_words_generator(comments_list))
-    comment_words = remove_custom_stopwords(comment_words, all_stopwords)
-    return comment_words
+    all_stopwords = stopwords.words('english') + ['from', 'subject', 're', 'edu', 'use']
+    texts = [[word for word in simple_preprocess(str(doc)) if word not in all_stopwords] for doc in comments_list]
+    return texts
 
 @st.cache_data
 def create_gensim_corpus(comment_words):
-    if not comment_words:
-        return None, None
-
-    _id2word = corpora.Dictionary(comment_words) # Renamed output to _id2word
-    _corpus = [id2word.doc2bow(text) for text in comment_words] # Renamed output to _corpus
-    return _id2word, _corpus
+    id2word = corpora.Dictionary(comment_words)
+    corpus = [id2word.doc2bow(text) for text in comment_words]
+    return id2word, corpus
 
 @st.cache_data
-def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
-    if _corpus is None or _id2word is None or not _corpus:
-        return None, None
+def train_gensim_lda_model(corpus, id2word, num_topics=10):
+    lda_model = gensim.models.LdaMulticore(corpus=corpus, id2word=id2word, num_topics=num_topics,
+                                           random_state=50, passes=10, per_word_topics=True)
+    return lda_model, lda_model[corpus]
 
-    lda_model = gensim.models.LdaMulticore(
-        corpus=_corpus,
-        id2word=_id2word,
-        num_topics=num_topics,
-        random_state=50,
-        passes=10,
-        per_word_topics=True
-    )
-    return lda_model, lda_model[_corpus]
-
-# --- Session State Initialization ---
+# --- Session State Init ---
 if "results_df" not in st.session_state:
-    st.session_state.results_df = pd.DataFrame(columns=[
-        "Original Comment", "Cleaned Comment", "Polarity", "Subjectivity", "Sentiment", "Opinion/Fact"
-    ])
+    st.session_state.results_df = pd.DataFrame(columns=["Original Comment", "Cleaned Comment", "Polarity", "Subjectivity", "Sentiment", "Opinion/Fact"])
 
-# --- File Upload Section ---
-st.subheader("📂 Upload and Analyze Comments")
-uploaded_file = st.file_uploader("Upload your file (CSV, Excel, or TXT)", type=["csv", "xlsx", "xls", "txt"])
-
-if uploaded_file is not None:
+# --- Upload File ---
+uploaded_file = st.file_uploader("📂 Upload your file (CSV, Excel, or TXT)", type=["csv", "xlsx", "xls", "txt"])
+if uploaded_file:
     try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".txt"):
-            # Assuming TXT files are line-separated comments, or single column tab-separated
-            # Adjust delimiter if your TXT format is different
-            df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment_text"])
-        else:
-            st.error("Unsupported file format.")
-            df = None
+        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") \
+            else pd.read_excel(uploaded_file) if uploaded_file.name.endswith((".xlsx", ".xls")) \
+            else pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
 
-        if df is not None:
-            st.success("✅ File uploaded successfully!")
-            # Automatically detect a suitable text column
-            potential_text_cols = [col for col in df.columns if df[col].dtype == 'object' and df[col].nunique() > 1]
-            if potential_text_cols:
-                selected_col = st.selectbox("Select the comment column", potential_text_cols)
-            else:
-                st.error("No suitable text columns found in the uploaded file.")
-                df = None # Invalidate df if no text column
+        text_cols = df.select_dtypes(include="object").columns.tolist()
+        selected_col = st.selectbox("Select the comment column", text_cols)
 
-            if df is not None and st.button("🔎 Analyze Uploaded Comments"):
-                with st.spinner("Analyzing comments... This may take a while for large files."):
-                    batch_results = []
-                    # Ensure the selected column exists and is not empty
-                    if selected_col in df.columns and not df[selected_col].dropna().empty:
-                        for comment in df[selected_col].dropna():
-                            cleaned = clean_text(comment)
-                            polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
-                            batch_results.append({
-                                "Original Comment": comment,
-                                "Cleaned Comment": cleaned,
-                                "Polarity": polarity,
-                                "Subjectivity": subjectivity,
-                                "Sentiment": sentiment,
-                                "Opinion/Fact": opinion_type
-                            })
-                        batch_df = pd.DataFrame(batch_results)
-                        st.session_state.results_df = batch_df # Update session state with new batch
+        if st.button("🔎 Analyze Uploaded Comments"):
+            results = []
+            for comment in df[selected_col].dropna():
+                cleaned = clean_text(comment)
+                polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
+                results.append({"Original Comment": comment, "Cleaned Comment": cleaned,
+                                "Polarity": polarity, "Subjectivity": subjectivity,
+                                "Sentiment": sentiment, "Opinion/Fact": opinion_type})
+            result_df = pd.DataFrame(results)
+            st.session_state.results_df = result_df
 
-                        st.markdown("### ✅ Batch Analysis Results")
-                        st.dataframe(batch_df)
+            st.dataframe(result_df)
+            st.download_button("📥 Download Results", data=result_df.to_csv(index=False).encode(), file_name="sentiment_results.csv", mime="text/csv")
 
-                        st.download_button(
-                            "📥 Download Batch Results",
-                            data=batch_df.to_csv(index=False).encode(),
-                            file_name="batch_sentiment_results.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        st.warning("The selected column is empty or does not exist. No comments to analyze.")
-        else:
-            st.info("Please upload a valid file to proceed with analysis.")
+            wordcloud = WordCloud(width=800, height=400, background_color="white").generate(" ".join(result_df["Cleaned Comment"]))
+            st.image(wordcloud.to_array(), use_container_width=True)
 
     except Exception as e:
-        st.error(f"Error processing file: {e}. Please ensure the file format is correct and contains valid data.")
-        st.exception(e) # Display full traceback for debugging
+        st.error(f"Error: {e}")
 
-
-# --- Display Analysis History & Visualizations ---
+# --- Visualizations & LDA ---
 if not st.session_state.results_df.empty:
-    st.markdown("---")
-    st.subheader("🗂️ Analysis History & Visualizations")
-    st.dataframe(st.session_state.results_df)
-
-    st.download_button(
-        "📥 Download All Results",
-        data=st.session_state.results_df.to_csv(index=False).encode(),
-        file_name="all_sentiment_results.csv",
-        mime="text/csv"
-    )
-
-    # --- WordCloud --- (Moved to appear first)
-    all_text = " ".join(st.session_state.results_df["Cleaned Comment"].dropna().tolist())
-    if all_text.strip():
-        st.markdown("### ☁️ Word Cloud for All Comments")
-        wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
-        st.image(wordcloud.to_array(), use_container_width=True)
-    else:
-        st.info("No cleaned text available to generate Word Cloud for all comments.")
-
-    # --- Sentiment Distribution (Polarity) --- (Moved to appear second)
     st.markdown("### 📊 Sentiment Distribution")
     sentiment_counts = st.session_state.results_df['Sentiment'].value_counts().reset_index()
     sentiment_counts.columns = ['Sentiment', 'Count']
+    color_scale = alt.Scale(domain=["😊 Positive", "😐 Neutral", "😠 Negative"], range=["#2ECC71", "#B2BABB", "#E74C3C"])
+    st.altair_chart(
+        alt.Chart(sentiment_counts).mark_bar().encode(
+            x=alt.X("Sentiment", sort=["😊 Positive", "😐 Neutral", "😠 Negative"]),
+            y="Count", color=alt.Color("Sentiment", scale=color_scale),
+            tooltip=["Sentiment", "Count"]).properties(width=600, height=400), use_container_width=True)
 
-    color_scale = alt.Scale(
-        domain=["😊 Positive", "😐 Neutral", "😠 Negative"],
-        range=["#2ECC71", "#B2BABB", "#E74C3C"]
-    )
-
-    bar_chart = alt.Chart(sentiment_counts).mark_bar().encode(
-        x=alt.X("Sentiment", sort=["😊 Positive", "😐 Neutral", "😠 Negative"]),
-        y="Count",
-        color=alt.Color("Sentiment", scale=color_scale),
-        tooltip=["Sentiment", "Count"]
-    ).properties(width=600, height=400)
-
-    st.altair_chart(bar_chart, use_container_width=True)
-
-    # --- Scatter plot (Polarity vs Subjectivity) --- (Moved to appear third)
     st.markdown("### 📌 Polarity vs Subjectivity")
-    scatter = alt.Chart(st.session_state.results_df).mark_circle(size=70).encode(
-        x='Polarity',
-        y='Subjectivity',
-        color='Sentiment',
-        tooltip=['Original Comment', 'Polarity', 'Subjectivity', 'Sentiment']
-    ).interactive()
-    st.altair_chart(scatter, use_container_width=True)
+    st.altair_chart(
+        alt.Chart(st.session_state.results_df).mark_circle(size=70).encode(
+            x='Polarity', y='Subjectivity', color='Sentiment',
+            tooltip=['Original Comment', 'Polarity', 'Subjectivity', 'Sentiment']).interactive(),
+        use_container_width=True)
 
-    # --- Topic Modeling Section (LDA) --- (Moved to appear last)
-    st.markdown("---")
-    st.header("🧠 Advanced Analysis: Topic Modeling (LDA)")
+    if st.checkbox("🔍 Perform Topic Modeling (LDA)"):
+        num_topics = st.slider("Number of Topics", 3, 15, 5)
+        comments = st.session_state.results_df["Cleaned Comment"].dropna()
 
-    if st.checkbox("🔍 Perform Topic Modeling (LDA) on Cleaned Comments"):
-        cleaned_comments_for_lda = st.session_state.results_df["Cleaned Comment"].dropna()
+        tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf = initialize_and_transform_dtms(comments)
+        lda_tf, lda_tfidf = train_sklearn_lda_models(dtm_tf, dtm_tfidf, n_components=num_topics)
 
-        if cleaned_comments_for_lda.empty:
-            st.warning("No cleaned comments available for Topic Modeling. Please upload a file and analyze comments first.")
-        else:
-            num_topics = st.slider("Select Number of Topics", min_value=3, max_value=15, value=5, key="num_topics_slider")
+        st.markdown("#### 🔖 Top Words per Topic (TF DTM):")
+        tf_feature_names = tf_vectorizer.get_feature_names_out()
+        for i, topic in enumerate(lda_tf.components_):
+            words = ", ".join([tf_feature_names[j] for j in topic.argsort()[:-11:-1]])
+            st.write(f"**Topic {i + 1}:**", words)
 
-            with st.spinner("Performing LDA Topic Modeling..."):
-                # Sklearn LDA
-                # Renamed output variables with leading underscores
-                tf_vectorizer, _dtm_tf, tfidf_vectorizer, _dtm_tfidf = initialize_and_transform_dtms(cleaned_comments_for_lda)
+        comment_words = prepare_text_for_gensim(comments.tolist())
+        id2word, corpus = create_gensim_corpus(comment_words)
+        lda_model, doc_lda = train_gensim_lda_model(corpus, id2word, num_topics=num_topics)
 
-                if _dtm_tf is not None and _dtm_tfidf is not None:
-                    # Pass the underscored variables to train_sklearn_lda_models
-                    lda_tf, lda_tfidf = train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=num_topics)
+        with st.spinner("Generating interactive topic visualization..."):
+            vis_data = gensimvis.prepare(lda_model, corpus, id2word)
+            html_string = pyLDAvis.prepared_data_to_html(vis_data)
+            st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
 
-                    st.markdown("#### 🔖 Top Words per Topic (TF DTM):")
-                    tf_feature_names = tf_vectorizer.get_feature_names_out()
-                    for topic_idx, topic in enumerate(lda_tf.components_):
-                        top_features_ind = topic.argsort()[:-10 - 1:-1]
-                        top_features = [tf_feature_names[i] for i in top_features_ind]
-                        st.write(f"**Topic {topic_idx+1}:**", ", ".join(top_features))
-
-                    # Add pyLDAvis for Sklearn LDA
-                    st.markdown("#### 📈 Interactive Topic Visualization (Sklearn LDA - TF)")
-                    with st.spinner("Generating pyLDAvis visualization for Sklearn LDA..."):
-                        # pyLDAvis.sklearn.prepare requires the LDA model, the DTM, and the vectorizer
-                        vis_data_sklearn = pyLDAvis.sklearn.prepare(lda_tf, _dtm_tf, tf_vectorizer, mds='tsne')
-                        html_string_sklearn = pyLDAvis.prepared_data_to_html(vis_data_sklearn)
-                        st.components.v1.html(html_string_sklearn, width=1000, height=800, scrolling=True)
-
-
-                    # Gensim LDA + pyLDAvis
-                    comment_words = prepare_text_for_gensim(cleaned_comments_for_lda.tolist())
-                    # Renamed output variables with leading underscores
-                    _id2word, _corpus = create_gensim_corpus(comment_words)
-
-                    if _corpus is not None and _id2word is not None and _corpus: # Check if corpus is not empty
-                        # Pass the underscored variables to train_gensim_lda_model
-                        lda_model_gensim, doc_lda = train_gensim_lda_model(_corpus, _id2word, num_topics=num_topics)
-
-                        if lda_model_gensim:
-                            st.markdown("#### 📈 Interactive Topic Visualization (Gensim LDA)")
-                            with st.spinner("Generating pyLDAvis visualization for Gensim LDA..."):
-                                vis_data_gensim = gensimvis.prepare(lda_model_gensim, _corpus, _id2word)
-                                html_string_gensim = pyLDAvis.prepared_data_to_html(vis_data_gensim)
-                                st.components.v1.html(html_string_gensim, width=1000, height=800, scrolling=True)
-                        else:
-                            st.warning("Gensim LDA model could not be trained. Check data quality or number of topics.")
-                    else:
-                        st.warning("Gensim corpus could not be created. This might be due to very sparse or empty cleaned comments after stopword removal.")
-                else:
-                    st.warning("DTMs could not be created for topic modeling. This might be due to insufficient data or words after cleaning.")
-
-
-# --- Single Comment Analysis Section ---
+# --- Single Comment Analysis ---
 st.markdown("---")
 st.subheader("✍️ Analyze a New Comment")
-user_comment = st.text_area("Type your comment here 👇", height=150, key="single_comment_input")
-
-if st.button("🔍 Analyze My Comment", key="analyze_single_comment_button"):
-    if user_comment.strip() == "":
+user_comment = st.text_area("Type your comment here 👇", height=150)
+if st.button("🔍 Analyze My Comment"):
+    if not user_comment.strip():
         st.warning("Please enter a comment.")
     else:
         cleaned = clean_text(user_comment)
-        if not cleaned.strip(): # Check if cleaned text is empty
-            st.warning("The comment could not be processed into meaningful words after cleaning. Please try a different comment.")
-        else:
-            polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
+        polarity, subjectivity, sentiment, opinion_type = analyze_sentiment(cleaned)
+        st.markdown(f"📝 Your comment expresses a **{sentiment}** sentiment and is more **{opinion_type.lower()}-based**.")
+        st.info(f"Polarity: {polarity}, Subjectivity: {subjectivity}")
 
-            st.markdown("### ✨ Sentiment Result")
-            st.markdown(f"📝 Your comment expresses a **{sentiment}** sentiment and is more **{opinion_type.lower()}-based**.")
-            st.info(f"Polarity: {polarity} (closer to 1 is positive, -1 is negative, 0 is neutral)")
-            st.info(f"Subjectivity: {subjectivity} (closer to 1 is opinion, 0 is fact)")
-
-            new_row = {
-                "Original Comment": user_comment,
-                "Cleaned Comment": cleaned,
-                "Polarity": polarity,
-                "Subjectivity": subjectivity,
-                "Sentiment": sentiment,
-                "Opinion/Fact": opinion_type
-            }
-            # Append new row using pd.concat for immutability and proper session state update
-            st.session_state.results_df = pd.concat(
-                [st.session_state.results_df, pd.DataFrame([new_row])],
-                ignore_index=True
-            )
-            st.success("Comment added to analysis history!")
-
-# Initial message if no data is present at all
-if st.session_state.results_df.empty and uploaded_file is None:
-    st.info("Upload a file or type a comment to begin sentiment analysis.")
+        new_row = pd.DataFrame([{
+            "Original Comment": user_comment,
+            "Cleaned Comment": cleaned,
+            "Polarity": polarity,
+            "Subjectivity": subjectivity,
+            "Sentiment": sentiment,
+            "Opinion/Fact": opinion_type
+        }])
+        st.session_state.results_df = pd.concat([st.session_state.results_df, new_row], ignore_index=True)
+        st.success("Comment added to analysis history!")
