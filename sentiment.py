@@ -20,6 +20,18 @@ import pyLDAvis.gensim_models as gensimvis
 # Page configuration
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="wide", page_icon="💬")
 
+# ----------------- Session State Password -----------------
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    password = st.text_input("🔒 Enter Password:", type="password")
+    if password == "CORBAN":
+        st.session_state["authenticated"] = True
+        st.success("Access granted. Welcome!")
+    else:
+        st.stop()
+
 # Download NLTK resources
 nltk.download('punkt_tab', quiet=True)
 nltk.download('stopwords', quiet=True)
@@ -28,14 +40,9 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# ------------------ Password Protection ------------------
-PASSWORD = "CORBAN"
-password = st.text_input("🔒 Enter Password:", type="password")
-if password != PASSWORD:
-    st.warning("Please enter the correct password.")
-    st.stop()
 
-# ---- Functions ----
+# ----------------- Functions -----------------
+
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -56,17 +63,17 @@ def generate_wordcloud(text):
     return wc.generate(text)
 
 def prepare_gensim_data(texts):
-    custom_stopwords = stopwords.words('english') + ['from', 'subject', 're', 'edu', 'use']
+    custom_stopwords = set(stopwords.words('english')).union({'from', 'subject', 're', 'edu', 'use'})
     processed_texts = [
         [word for word in simple_preprocess(str(doc), deacc=True) if word not in custom_stopwords]
         for doc in texts
     ]
     return processed_texts
 
-@st.cache_resource(show_spinner=False)
-def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
+@st.cache_resource
+def train_gensim_lda_model(corpus, _id2word, num_topics=10):
     lda_model = gensim.models.LdaMulticore(
-        corpus=_corpus,
+        corpus=corpus,
         id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
@@ -77,7 +84,7 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
     )
     return lda_model
 
-# ---- File Upload ----
+# ----------------- Upload File -----------------
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
@@ -116,38 +123,38 @@ if uploaded_file:
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # ---- Word Cloud ----
+            # ----------------- Word Cloud -----------------
             st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
             if len(all_text.strip()) > 0:
                 wc_image = generate_wordcloud(all_text)
-                st.image(wc_image.to_array(), caption="Word Cloud", use_column_width=True)
+                st.image(wc_image.to_array(), caption="Word Cloud", use_container_width=True)
             else:
                 st.warning("Not enough text for Word Cloud.")
 
-            # ---- Sentiment Distribution ----
+            # ----------------- Sentiment Distribution -----------------
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
             counts.columns = ["Sentiment", "Count"]
-            bar_chart = alt.Chart(counts).mark_bar().encode(
+            chart = alt.Chart(counts).mark_bar().encode(
                 x='Sentiment',
                 y='Count',
                 color='Sentiment',
                 tooltip=['Sentiment', 'Count']
             ).properties(width=600)
-            st.altair_chart(bar_chart)
+            st.altair_chart(chart)
 
-            # ---- Scatter Plot ----
-            st.subheader("📈 Sentiment Scatter Plot (Polarity vs Subjectivity)")
+            # ----------------- Scatter Plot -----------------
+            st.subheader("🎯 Polarity vs Subjectivity Scatter Plot")
             scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
-                x=alt.X('Polarity', scale=alt.Scale(domain=[-1, 1])),
-                y=alt.Y('Subjectivity', scale=alt.Scale(domain=[0, 1])),
-                color=alt.Color('Sentiment', scale=alt.Scale(scheme='set1')),
+                x='Polarity',
+                y='Subjectivity',
+                color='Sentiment',
                 tooltip=['Original', 'Polarity', 'Subjectivity', 'Sentiment']
-            ).properties(width=700, height=400).interactive()
+            ).interactive().properties(width=700, height=400)
             st.altair_chart(scatter_chart)
 
-            # ---- LDA Topic Modeling ----
+            # ----------------- LDA Topic Modeling -----------------
             st.subheader("🧠 Topic Modeling (LDA)")
             num_topics = st.slider("Select Number of Topics", 3, 15, 5)
             processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
@@ -156,15 +163,11 @@ if uploaded_file:
 
             lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-            st.markdown("**LDA Dictionary (token2id mapping):**")
-            dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
-            st.dataframe(dict_df)
-
             st.markdown("**LDA Topics:**")
             for idx, topic in lda_model.print_topics():
                 st.write(f"**Topic {idx+1}:** {topic}")
 
-            # ---- pyLDAvis Interactive ----
+            # ----------------- pyLDAvis -----------------
             st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
             with st.spinner("Generating pyLDAvis..."):
                 vis = gensimvis.prepare(lda_model, corpus, id2word)
