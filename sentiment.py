@@ -65,6 +65,21 @@ def prepare_gensim_data(texts):
     ]
     return processed_texts
 
+st.subheader("📈 Sentiment Scatter Plot (Polarity vs Subjectivity)")
+
+scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
+    x=alt.X('Polarity', scale=alt.Scale(domain=[-1, 1])),
+    y=alt.Y('Subjectivity', scale=alt.Scale(domain=[0, 1])),
+    color=alt.Color('Sentiment', scale=alt.Scale(scheme='set1')),
+    tooltip=['Original', 'Polarity', 'Subjectivity', 'Sentiment']
+).properties(
+    width=700,
+    height=400
+).interactive()
+
+st.altair_chart(scatter_chart)
+
+
 @st.cache_resource
 def train_gensim_lda_model(corpus, _id2word, num_topics=10):
     lda_model = gensim.models.LdaMulticore(
@@ -74,7 +89,6 @@ def train_gensim_lda_model(corpus, _id2word, num_topics=10):
         random_state=50,
         passes=30,
         iterations=200,
-        chunksize=50,
         per_word_topics=True
     )
     return lda_model
