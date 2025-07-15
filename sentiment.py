@@ -153,35 +153,32 @@ if uploaded_file:
             st.altair_chart(scatter_chart)
 
             # --- LDA Topic Modeling ---
-st.subheader("🧠 Topic Modeling (LDA)")
+try:
+    # --- LDA Topic Modeling ---
+    st.subheader("🧠 Topic Modeling (LDA)")
 
-# Ensure there's enough data
-if len(processed_texts) < 3:
-    st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
-else:
-    max_possible_topics = min(15, len(processed_texts), len(id2word))
-    num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
+    if len(processed_texts) < 3:
+        st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
+    else:
+        max_possible_topics = min(15, len(processed_texts), len(id2word))
+        num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
 
-    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+        lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-    st.markdown("**LDA Dictionary (token2id mapping):**")
-    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
-    st.dataframe(dict_df)
+        st.markdown("**LDA Dictionary (token2id mapping):**")
+        dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
+        st.dataframe(dict_df)
 
-    st.markdown("**LDA Topics:**")
-    for idx, topic in lda_model.print_topics():
-        st.write(f"**Topic {idx+1}:** {topic}")
+        st.markdown("**LDA Topics:**")
+        for idx, topic in lda_model.print_topics():
+            st.write(f"**Topic {idx+1}:** {topic}")
 
+        # pyLDAvis
+        st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+        with st.spinner("Generating visualization..."):
+            vis = gensimvis.prepare(lda_model, corpus, id2word)
+            html_string = pyLDAvis.prepared_data_to_html(vis)
+            st.components.v1.html(html_string, width=1000, height=800)
 
-            # ------------------ pyLDAvis Interactive ------------------
-            st.subheader("📈 Interactive LDA Visualization")
-            with st.spinner("Generating interactive visualization..."):
-                vis = gensimvis.prepare(lda_model, corpus, id2word)
-                html_string = pyLDAvis.prepared_data_to_html(vis)
-                st.components.v1.html(html_string, width=1000, height=800)
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-
-else:
-    st.info("Please upload a dataset to begin analysis.")
+except Exception as e:
+    st.error(f"An error occurred during LDA topic modeling: {e}")
