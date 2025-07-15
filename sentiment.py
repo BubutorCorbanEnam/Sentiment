@@ -74,7 +74,10 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
         corpus=_corpus,
         id2word=_id2word,
         num_topics=num_topics,
-        random_state=50
+        random_state=50,
+        passes=5,         # Optimized for Streamlit Cloud
+        iterations=50,    # Optimized for speed
+        per_word_topics=True
     )
     return lda_model
 
