@@ -40,6 +40,7 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
+# ------------------ Functions ------------------
 
 def clean_text(text):
     text = str(text).lower()
@@ -166,10 +167,6 @@ if uploaded_file:
                     num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
 
                     lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
-
-                    st.markdown("**LDA Dictionary (Token to ID Mapping):**")
-                    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
-                    st.dataframe(dict_df)
 
                     st.markdown("**LDA Topics:**")
                     for idx, topic in lda_model.print_topics():
