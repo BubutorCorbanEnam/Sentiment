@@ -159,7 +159,7 @@ if uploaded_file:
                 st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
             else:
                 max_possible_topics = min(15, len(processed_texts), len(id2word))
-                num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, 10)
+                num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, 5)
 
                 if st.button("🚀 Run LDA Analysis"):
                     lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
