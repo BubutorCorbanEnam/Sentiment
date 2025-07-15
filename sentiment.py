@@ -28,25 +28,15 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# Custom CSS
-st.markdown("""
-    <style>
-        .main { background-color: #f4f6f9; }
-        .stButton>button { background-color: #002147; color: white; border-radius: 8px; }
-        .stDownloadButton>button { background-color: #FFD700; color: black; border-radius: 8px; }
-    </style>
-""", unsafe_allow_html=True)
-
-# Password Protection
+# ------------------ Password Protection ------------------
 PASSWORD = "CORBAN"
 password = st.text_input("🔒 Enter Password:", type="password")
 if password != PASSWORD:
     st.warning("Please enter the correct password.")
     st.stop()
 
-st.title("University of Cape Coast - Sentiment & Topic Analysis Portal")
+# ------------------ Functions ------------------
 
-# --- Functions ---
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -66,6 +56,7 @@ def generate_wordcloud(text):
     wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
     return wc.generate(text)
 
+@st.cache_data(show_spinner=False)
 def prepare_gensim_data(texts):
     custom_stopwords = set(stopwords.words('english')).union({'from', 'subject', 're', 'edu', 'use'})
     processed_texts = [
@@ -74,25 +65,27 @@ def prepare_gensim_data(texts):
     ]
     return processed_texts
 
+@st.cache_resource(show_spinner=False)
 def train_gensim_lda_model(corpus, id2word, num_topics=10):
     lda_model = gensim.models.LdaMulticore(
         corpus=corpus,
         id2word=id2word,
         num_topics=num_topics,
         random_state=50,
-        passes=30,        # Increased passes
-        iterations=200,   # Increased iterations
-        chunksize=50,     # Smaller batch size for finer updates
+        passes=30,           # More passes for better convergence
+        iterations=300,      # More iterations
+        chunksize=50,        # Mini-batches for speed
+        workers=4,           # Multicore processing
         per_word_topics=True
     )
     return lda_model
 
-# --- File Upload ---
-uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
+# ------------------ File Upload ------------------
+
+uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT file", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
     try:
-        # Load Data
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         elif uploaded_file.name.endswith((".xlsx", ".xls")):
@@ -104,9 +97,10 @@ if uploaded_file:
             st.stop()
 
         text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select Text Column", text_cols)
+        selected_col = st.selectbox("Select Text Column for Analysis", text_cols)
 
-        if st.button("🔍 Run Analysis"):
+        if st.button("🔍 Run Sentiment & Topic Analysis"):
+            # Sentiment Analysis
             results = []
             for comment in df[selected_col].dropna():
                 cleaned = clean_text(comment)
@@ -121,12 +115,12 @@ if uploaded_file:
                 })
 
             results_df = pd.DataFrame(results)
-            st.subheader("🗂️ Analysis Results")
+            st.subheader("🗂️ Sentiment Analysis Results")
             st.dataframe(results_df)
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # --- Word Cloud ---
+            # WordCloud
             st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
             if len(all_text.strip()) > 0:
@@ -135,7 +129,7 @@ if uploaded_file:
             else:
                 st.warning("Not enough text for Word Cloud.")
 
-            # --- Sentiment Distribution ---
+            # Sentiment Distribution
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
             counts.columns = ["Sentiment", "Count"]
@@ -147,24 +141,27 @@ if uploaded_file:
             ).properties(width=600)
             st.altair_chart(chart)
 
-            # --- LDA Topic Modeling ---
-            st.subheader("🧠 Topic Modeling (LDA)")
+            # Topic Modeling
+            st.subheader("🧠 Topic Modeling (LDA - Gensim)")
             num_topics = st.slider("Select Number of Topics", 3, 15, 5)
+
             processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
             id2word = corpora.Dictionary(processed_texts)
             corpus = [id2word.doc2bow(text) for text in processed_texts]
 
             lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-            st.markdown("**LDA Dictionary (token2id mapping):**")
+            # Display Dictionary
+            st.markdown("**LDA Dictionary (Token to ID Mapping):**")
             dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
             st.dataframe(dict_df)
 
+            # Display Topics
             st.markdown("**LDA Topics:**")
             for idx, topic in lda_model.print_topics():
                 st.write(f"**Topic {idx+1}:** {topic}")
 
-            # --- pyLDAvis Interactive ---
+            # Interactive Visualization
             st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
             with st.spinner("Generating pyLDAvis..."):
                 vis = gensimvis.prepare(lda_model, corpus, id2word)
@@ -175,4 +172,4 @@ if uploaded_file:
         st.error(f"An error occurred: {e}")
 
 else:
-    st.info("Please upload a dataset to begin analysis.")
+    st.info("Please upload your dataset to begin analysis.")
