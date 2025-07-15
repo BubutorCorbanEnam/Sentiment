@@ -70,7 +70,7 @@ def prepare_gensim_data(texts):
     return processed_texts
 
 @st.cache_resource(show_spinner=False)
-def train_gensim_lda_model(_corpus, _id2word, num_topics=5):
+def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
     lda_model = gensim.models.LdaModel(
         corpus=_corpus,
         id2word=_id2word,
