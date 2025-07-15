@@ -21,7 +21,7 @@ import pyLDAvis.gensim_models as gensimvis
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="wide", page_icon="💬")
 
 # Download NLTK resources
-nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 
