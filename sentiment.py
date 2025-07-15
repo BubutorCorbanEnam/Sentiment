@@ -151,36 +151,50 @@ if uploaded_file:
             st.altair_chart(scatter_chart)
 
             # ------------------ LDA Topic Modeling ------------------
-            st.subheader("🧠 Topic Modeling (LDA)")
+st.subheader("🧠 Topic Modeling (LDA)")
 
-            processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
-            id2word = corpora.Dictionary(processed_texts)
-            corpus = [id2word.doc2bow(text) for text in processed_texts]
+processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
+id2word = corpora.Dictionary(processed_texts)
+corpus = [id2word.doc2bow(text) for text in processed_texts]
 
-            if len(processed_texts) < 3:
-                st.warning("Not enough data for LDA topic modeling.")
-            else:
-                max_topics = min(15, len(processed_texts), len(id2word))
-                num_topics = st.slider("Select Number of Topics", 3, max_topics, 5)
+# Check for sufficient data for LDA
+if not processed_texts:
+    st.warning("No valid text found for topic modeling after cleaning.")
+else:
+    # Filter out empty documents from the corpus
+    corpus = [doc for doc in corpus if doc] 
 
-                if st.button("🚀 Run LDA Analysis"):
-                    try:
-                        lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+    if len(corpus) < 3:
+        st.warning("Not enough unique documents for LDA topic modeling after processing. Need at least 3 documents.")
+    else:
+        max_topics = min(15, len(corpus), len(id2word))
+        if max_topics < 3:
+            st.warning(f"Insufficient data to create at least 3 topics. Only {max_topics} topics can be potentially generated.")
+        else:
+            # This is the line that gives the user control over the number of topics
+            num_topics = st.slider("Select Number of Topics", 3, max_topics, min(5, max_topics))
 
-                        st.markdown("**LDA Topics:**")
-                        for idx, topic in lda_model.print_topics():
-                            st.write(f"**Topic {idx+1}:** {topic}")
+            if st.button("🚀 Run LDA Analysis"):
+                try:
+                    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-                        # pyLDAvis visualization
-                        st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                        with st.spinner("Generating visualization..."):
+                    st.markdown("**LDA Topics:**")
+                    for idx, topic in lda_model.print_topics():
+                        st.write(f"**Topic {idx+1}:** {topic}")
+
+                    # pyLDAvis visualization
+                    st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                    with st.spinner("Generating visualization..."):
+                        if corpus: # Ensure corpus is not empty for visualization
                             vis = gensimvis.prepare(lda_model, corpus, id2word)
                             html_string = pyLDAvis.prepared_data_to_html(vis)
                             st.components.v1.html(html_string, width=1000, height=800)
+                        else:
+                            st.warning("No valid corpus to generate pyLDAvis visualization.")
 
-                    except Exception as e:
-                        st.error(f"An error occurred during LDA: {e}")
-
+                except Exception as e:
+                    st.error(f"An error occurred during LDA: {e}")
+                    
     except Exception as e:
         st.error(f"An error occurred: {e}")
 
