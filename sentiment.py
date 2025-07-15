@@ -75,8 +75,8 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
         id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
-        passes=5,         # Optimized for Streamlit Cloud
-        iterations=50,    # Optimized for speed
+        passes=3,         # Reduced for Streamlit Cloud
+        iterations=20,    # Reduced for speed and memory
         per_word_topics=True
     )
     return lda_model
@@ -86,7 +86,6 @@ uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", 
 
 if uploaded_file:
     try:
-        # Load Data
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         elif uploaded_file.name.endswith((".xlsx", ".xls")):
@@ -120,7 +119,7 @@ if uploaded_file:
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # ------------------ Word Cloud ------------------
+            # Word Cloud
             st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
             if len(all_text.strip()) > 0:
@@ -129,7 +128,7 @@ if uploaded_file:
             else:
                 st.warning("Not enough text for Word Cloud.")
 
-            # ------------------ Sentiment Distribution ------------------
+            # Sentiment Bar Chart
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
             counts.columns = ["Sentiment", "Count"]
@@ -141,7 +140,7 @@ if uploaded_file:
             ).properties(width=600)
             st.altair_chart(chart)
 
-            # ------------------ Scatter Plot ------------------
+            # Scatter Plot
             st.subheader("🎯 Sentiment Scatter Plot")
             scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
                 x=alt.X('Polarity', title='Polarity'),
@@ -159,24 +158,28 @@ if uploaded_file:
             corpus = [id2word.doc2bow(text) for text in processed_texts]
 
             if len(processed_texts) < 3:
-                st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
+                st.warning("Not enough data for LDA topic modeling.")
             else:
-                max_possible_topics = min(15, len(processed_texts), len(id2word))
-                num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, 5)
+                max_topics = min(15, len(processed_texts), len(id2word))
+                num_topics = st.slider("Select Number of Topics", 3, max_topics, 5)
 
                 if st.button("🚀 Run LDA Analysis"):
-                    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                    try:
+                        lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-                    st.markdown("**LDA Topics:**")
-                    for idx, topic in lda_model.print_topics():
-                        st.write(f"**Topic {idx+1}:** {topic}")
+                        st.markdown("**LDA Topics:**")
+                        for idx, topic in lda_model.print_topics():
+                            st.write(f"**Topic {idx+1}:** {topic}")
 
-                    # ------------------ pyLDAvis ------------------
-                    st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                    with st.spinner("Generating visualization..."):
-                        vis = gensimvis.prepare(lda_model, corpus, id2word)
-                        html_string = pyLDAvis.prepared_data_to_html(vis)
-                        st.components.v1.html(html_string, width=1000, height=800)
+                        # pyLDAvis visualization
+                        st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                        with st.spinner("Generating visualization..."):
+                            vis = gensimvis.prepare(lda_model, corpus, id2word)
+                            html_string = pyLDAvis.prepared_data_to_html(vis)
+                            st.components.v1.html(html_string, width=1000, height=800)
+
+                    except Exception as e:
+                        st.error(f"An error occurred during LDA: {e}")
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
