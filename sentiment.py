@@ -41,7 +41,6 @@ stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
 
-# ------------------ Functions ------------------
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -76,8 +75,8 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
         id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
-        passes=5,          # Reduced for Streamlit Cloud
-        iterations=50,     # Reduced for Streamlit Cloud
+        passes=5,          # Optimized for Streamlit Cloud
+        iterations=50,     # Optimized for Streamlit Cloud
         per_word_topics=True
     )
     return lda_model
@@ -140,7 +139,7 @@ if uploaded_file:
                 color='Sentiment',
                 tooltip=['Sentiment', 'Count']
             ).properties(width=600)
-            st.altair_chart(chart)
+            st.altair_chart(chart, use_container_width=True)
 
             # ------------------ Scatter Plot ------------------
             st.subheader("🎯 Sentiment Scatter Plot")
@@ -150,35 +149,44 @@ if uploaded_file:
                 color='Sentiment',
                 tooltip=['Original', 'Polarity', 'Subjectivity']
             ).interactive().properties(width=700)
-            st.altair_chart(scatter_chart)
+            st.altair_chart(scatter_chart, use_container_width=True)
 
-            # --- LDA Topic Modeling ---
-try:
-    # --- LDA Topic Modeling ---
-    st.subheader("🧠 Topic Modeling (LDA)")
+            # ------------------ LDA Topic Modeling ------------------
+            st.subheader("🧠 Topic Modeling (LDA)")
 
-    if len(processed_texts) < 3:
-        st.warning("Not enough data for LDA topic modeling. Please provide more text data.")
-    else:
-        max_possible_topics = min(15, len(processed_texts), len(id2word))
-        num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
+            try:
+                processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
+                id2word = corpora.Dictionary(processed_texts)
+                corpus = [id2word.doc2bow(text) for text in processed_texts]
 
-        lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                if len(processed_texts) < 3 or len(id2word) < 3:
+                    st.warning("Not enough data for LDA topic modeling. Provide more text data.")
+                else:
+                    max_possible_topics = min(15, len(processed_texts), len(id2word))
+                    num_topics = st.slider("Select Number of Topics", 3, max_possible_topics, min(5, max_possible_topics))
 
-        st.markdown("**LDA Dictionary (token2id mapping):**")
-        dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
-        st.dataframe(dict_df)
+                    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-        st.markdown("**LDA Topics:**")
-        for idx, topic in lda_model.print_topics():
-            st.write(f"**Topic {idx+1}:** {topic}")
+                    st.markdown("**LDA Dictionary (Token to ID Mapping):**")
+                    dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
+                    st.dataframe(dict_df)
 
-        # pyLDAvis
-        st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-        with st.spinner("Generating visualization..."):
-            vis = gensimvis.prepare(lda_model, corpus, id2word)
-            html_string = pyLDAvis.prepared_data_to_html(vis)
-            st.components.v1.html(html_string, width=1000, height=800)
+                    st.markdown("**LDA Topics:**")
+                    for idx, topic in lda_model.print_topics():
+                        st.write(f"**Topic {idx+1}:** {topic}")
 
-except Exception as e:
-    st.error(f"An error occurred during LDA topic modeling: {e}")
+                    # pyLDAvis
+                    st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                    with st.spinner("Generating visualization..."):
+                        vis = gensimvis.prepare(lda_model, corpus, id2word)
+                        html_string = pyLDAvis.prepared_data_to_html(vis)
+                        st.components.v1.html(html_string, width=1000, height=800)
+
+            except Exception as e:
+                st.error(f"An error occurred during LDA topic modeling: {e}")
+
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+
+else:
+    st.info("Please upload a dataset to begin analysis.")
