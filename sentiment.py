@@ -180,12 +180,12 @@ def initialize_and_transform_dtms(df_comments):
         max_df=0.5,
         min_df=10
     )
-    dtm_tf = tf_vectorizer.fit_transform(df_comments.values.astype('U'))
+    _dtm_tf = tf_vectorizer.fit_transform(df_comments.values.astype('U')) # Renamed output to _dtm_tf
 
     tfidf_vectorizer = TfidfVectorizer(**tf_vectorizer.get_params())
-    dtm_tfidf = tfidf_vectorizer.fit_transform(df_comments.values.astype('U'))
+    _dtm_tfidf = tfidf_vectorizer.fit_transform(df_comments.values.astype('U')) # Renamed output to _dtm_tfidf
 
-    return tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf
+    return tf_vectorizer, _dtm_tf, tfidf_vectorizer, _dtm_tfidf
 
 @st.cache_data
 def train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=10, random_state=50):
@@ -224,9 +224,9 @@ def create_gensim_corpus(comment_words):
     if not comment_words:
         return None, None
 
-    id2word = corpora.Dictionary(comment_words)
-    corpus = [id2word.doc2bow(text) for text in comment_words]
-    return id2word, corpus
+    _id2word = corpora.Dictionary(comment_words) # Renamed output to _id2word
+    _corpus = [id2word.doc2bow(text) for text in comment_words] # Renamed output to _corpus
+    return _id2word, _corpus
 
 @st.cache_data
 def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
@@ -380,11 +380,12 @@ if not st.session_state.results_df.empty:
 
             with st.spinner("Performing LDA Topic Modeling..."):
                 # Sklearn LDA
-                tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf = initialize_and_transform_dtms(cleaned_comments_for_lda)
+                # Renamed output variables with leading underscores
+                tf_vectorizer, _dtm_tf, tfidf_vectorizer, _dtm_tfidf = initialize_and_transform_dtms(cleaned_comments_for_lda)
 
-                if dtm_tf is not None and dtm_tfidf is not None:
-                    # Pass dtm_tf and dtm_tfidf with underscores to train_sklearn_lda_models
-                    lda_tf, lda_tfidf = train_sklearn_lda_models(dtm_tf, dtm_tfidf, n_components=num_topics)
+                if _dtm_tf is not None and _dtm_tfidf is not None:
+                    # Pass the underscored variables to train_sklearn_lda_models
+                    lda_tf, lda_tfidf = train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=num_topics)
 
                     st.markdown("#### 🔖 Top Words per Topic (TF DTM):")
                     tf_feature_names = tf_vectorizer.get_feature_names_out()
@@ -397,24 +398,24 @@ if not st.session_state.results_df.empty:
                     st.markdown("#### 📈 Interactive Topic Visualization (Sklearn LDA - TF)")
                     with st.spinner("Generating pyLDAvis visualization for Sklearn LDA..."):
                         # pyLDAvis.sklearn.prepare requires the LDA model, the DTM, and the vectorizer
-                        vis_data_sklearn = pyLDAvis.sklearn.prepare(lda_tf, dtm_tf, tf_vectorizer, mds='tsne')
+                        vis_data_sklearn = pyLDAvis.sklearn.prepare(lda_tf, _dtm_tf, tf_vectorizer, mds='tsne')
                         html_string_sklearn = pyLDAvis.prepared_data_to_html(vis_data_sklearn)
                         st.components.v1.html(html_string_sklearn, width=1000, height=800, scrolling=True)
 
 
                     # Gensim LDA + pyLDAvis
                     comment_words = prepare_text_for_gensim(cleaned_comments_for_lda.tolist())
-                    # Pass comment_words to create_gensim_corpus
-                    id2word, corpus = create_gensim_corpus(comment_words)
+                    # Renamed output variables with leading underscores
+                    _id2word, _corpus = create_gensim_corpus(comment_words)
 
-                    if corpus is not None and id2word is not None and corpus: # Check if corpus is not empty
-                        # Pass corpus and id2word with underscores to train_gensim_lda_model
-                        lda_model_gensim, doc_lda = train_gensim_lda_model(corpus, id2word, num_topics=num_topics)
+                    if _corpus is not None and _id2word is not None and _corpus: # Check if corpus is not empty
+                        # Pass the underscored variables to train_gensim_lda_model
+                        lda_model_gensim, doc_lda = train_gensim_lda_model(_corpus, _id2word, num_topics=num_topics)
 
                         if lda_model_gensim:
                             st.markdown("#### 📈 Interactive Topic Visualization (Gensim LDA)")
                             with st.spinner("Generating pyLDAvis visualization for Gensim LDA..."):
-                                vis_data_gensim = gensimvis.prepare(lda_model_gensim, corpus, id2word)
+                                vis_data_gensim = gensimvis.prepare(lda_model_gensim, _corpus, _id2word)
                                 html_string_gensim = pyLDAvis.prepared_data_to_html(vis_data_gensim)
                                 st.components.v1.html(html_string_gensim, width=1000, height=800, scrolling=True)
                         else:
