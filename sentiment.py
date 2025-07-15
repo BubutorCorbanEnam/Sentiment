@@ -188,7 +188,7 @@ def initialize_and_transform_dtms(df_comments):
     return tf_vectorizer, dtm_tf, tfidf_vectorizer, dtm_tfidf
 
 @st.cache_data
-def train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=10, random_state=50): # <--- ADDED UNDERSCORES
+def train_sklearn_lda_models(_dtm_tf, _dtm_tfidf, n_components=10, random_state=50):
     if _dtm_tf is None or _dtm_tfidf is None:
         return None, None
 
@@ -229,7 +229,7 @@ def create_gensim_corpus(comment_words):
     return id2word, corpus
 
 @st.cache_data
-def train_gensim_lda_model(_corpus, _id2word, num_topics=10): # <--- ADDED UNDERSCORES
+def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
     if _corpus is None or _id2word is None or not _corpus:
         return None, None
 
@@ -296,15 +296,6 @@ if uploaded_file is not None:
                         batch_df = pd.DataFrame(batch_results)
                         st.session_state.results_df = batch_df # Update session state with new batch
 
-                        # WordCloud
-                        all_text = " ".join(batch_df["Cleaned Comment"].dropna().tolist())
-                        if all_text.strip():
-                            st.markdown("### ☁️ Word Cloud for Uploaded Comments")
-                            wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
-                            st.image(wordcloud.to_array(), use_container_width=True)
-                        else:
-                            st.info("No cleaned text available to generate Word Cloud.")
-
                         st.markdown("### ✅ Batch Analysis Results")
                         st.dataframe(batch_df)
 
@@ -337,7 +328,16 @@ if not st.session_state.results_df.empty:
         mime="text/csv"
     )
 
-    # Sentiment Distribution
+    # --- WordCloud --- (Moved to appear first)
+    all_text = " ".join(st.session_state.results_df["Cleaned Comment"].dropna().tolist())
+    if all_text.strip():
+        st.markdown("### ☁️ Word Cloud for All Comments")
+        wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
+        st.image(wordcloud.to_array(), use_container_width=True)
+    else:
+        st.info("No cleaned text available to generate Word Cloud for all comments.")
+
+    # --- Sentiment Distribution (Polarity) --- (Moved to appear second)
     st.markdown("### 📊 Sentiment Distribution")
     sentiment_counts = st.session_state.results_df['Sentiment'].value_counts().reset_index()
     sentiment_counts.columns = ['Sentiment', 'Count']
@@ -356,7 +356,7 @@ if not st.session_state.results_df.empty:
 
     st.altair_chart(bar_chart, use_container_width=True)
 
-    # Scatter plot
+    # --- Scatter plot (Polarity vs Subjectivity) --- (Moved to appear third)
     st.markdown("### 📌 Polarity vs Subjectivity")
     scatter = alt.Chart(st.session_state.results_df).mark_circle(size=70).encode(
         x='Polarity',
@@ -366,7 +366,7 @@ if not st.session_state.results_df.empty:
     ).interactive()
     st.altair_chart(scatter, use_container_width=True)
 
-    # --- Topic Modeling Section ---
+    # --- Topic Modeling Section (LDA) --- (Moved to appear last)
     st.markdown("---")
     st.header("🧠 Advanced Analysis: Topic Modeling (LDA)")
 
