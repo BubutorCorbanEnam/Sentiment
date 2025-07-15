@@ -116,7 +116,7 @@ if uploaded_file:
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # --- Word Cloud ---
+            # ---- Word Cloud ----
             st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
             if len(all_text.strip()) > 0:
@@ -125,7 +125,7 @@ if uploaded_file:
             else:
                 st.warning("Not enough text for Word Cloud.")
 
-            # --- Sentiment Distribution ---
+            # ---- Sentiment Distribution ----
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
             counts.columns = ["Sentiment", "Count"]
@@ -137,7 +137,7 @@ if uploaded_file:
             ).properties(width=600)
             st.altair_chart(bar_chart)
 
-            # --- Scatter Plot ---
+            # ---- Scatter Plot ----
             st.subheader("📈 Sentiment Scatter Plot (Polarity vs Subjectivity)")
             scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
                 x=alt.X('Polarity', scale=alt.Scale(domain=[-1, 1])),
@@ -147,7 +147,7 @@ if uploaded_file:
             ).properties(width=700, height=400).interactive()
             st.altair_chart(scatter_chart)
 
-            # --- LDA Topic Modeling ---
+            # ---- LDA Topic Modeling ----
             st.subheader("🧠 Topic Modeling (LDA)")
             num_topics = st.slider("Select Number of Topics", 3, 15, 5)
             processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
@@ -164,7 +164,7 @@ if uploaded_file:
             for idx, topic in lda_model.print_topics():
                 st.write(f"**Topic {idx+1}:** {topic}")
 
-            # --- pyLDAvis Interactive ---
+            # ---- pyLDAvis Interactive ----
             st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
             with st.spinner("Generating pyLDAvis..."):
                 vis = gensimvis.prepare(lda_model, corpus, id2word)
