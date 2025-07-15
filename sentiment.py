@@ -35,8 +35,7 @@ if password != PASSWORD:
     st.warning("Please enter the correct password.")
     st.stop()
 
-# ------------------ Functions ------------------
-
+# ---- Functions ----
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -56,49 +55,34 @@ def generate_wordcloud(text):
     wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
     return wc.generate(text)
 
-@st.cache_data(show_spinner=False)
 def prepare_gensim_data(texts):
-    custom_stopwords = set(stopwords.words('english')).union({'from', 'subject', 're', 'edu', 'use'})
+    custom_stopwords = stopwords.words('english') + ['from', 'subject', 're', 'edu', 'use']
     processed_texts = [
         [word for word in simple_preprocess(str(doc), deacc=True) if word not in custom_stopwords]
         for doc in texts
     ]
     return processed_texts
 
-st.subheader("📈 Sentiment Scatter Plot (Polarity vs Subjectivity)")
-
-scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
-    x=alt.X('Polarity', scale=alt.Scale(domain=[-1, 1])),
-    y=alt.Y('Subjectivity', scale=alt.Scale(domain=[0, 1])),
-    color=alt.Color('Sentiment', scale=alt.Scale(scheme='set1')),
-    tooltip=['Original', 'Polarity', 'Subjectivity', 'Sentiment']
-).properties(
-    width=700,
-    height=400
-).interactive()
-
-st.altair_chart(scatter_chart)
-
-
-@st.cache_resource
-def train_gensim_lda_model(corpus, _id2word, num_topics=10):
+@st.cache_resource(show_spinner=False)
+def train_gensim_lda_model(_corpus, _id2word, num_topics=10):
     lda_model = gensim.models.LdaMulticore(
-        corpus=corpus,
+        corpus=_corpus,
         id2word=_id2word,
         num_topics=num_topics,
         random_state=50,
         passes=30,
         iterations=200,
+        chunksize=50,
         per_word_topics=True
     )
     return lda_model
 
-# ------------------ File Upload ------------------
-
-uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT file", type=["csv", "xlsx", "xls", "txt"])
+# ---- File Upload ----
+uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
     try:
+        # Load Data
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         elif uploaded_file.name.endswith((".xlsx", ".xls")):
@@ -110,10 +94,9 @@ if uploaded_file:
             st.stop()
 
         text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select Text Column for Analysis", text_cols)
+        selected_col = st.selectbox("Select Text Column", text_cols)
 
-        if st.button("🔍 Run Sentiment & Topic Analysis"):
-            # Sentiment Analysis
+        if st.button("🔍 Run Analysis"):
             results = []
             for comment in df[selected_col].dropna():
                 cleaned = clean_text(comment)
@@ -128,12 +111,12 @@ if uploaded_file:
                 })
 
             results_df = pd.DataFrame(results)
-            st.subheader("🗂️ Sentiment Analysis Results")
+            st.subheader("🗂️ Analysis Results")
             st.dataframe(results_df)
 
             st.download_button("📥 Download CSV", results_df.to_csv(index=False), file_name="sentiment_results.csv")
 
-            # WordCloud
+            # --- Word Cloud ---
             st.subheader("☁️ Word Cloud")
             all_text = " ".join(results_df["Cleaned"].tolist())
             if len(all_text.strip()) > 0:
@@ -142,39 +125,46 @@ if uploaded_file:
             else:
                 st.warning("Not enough text for Word Cloud.")
 
-            # Sentiment Distribution
+            # --- Sentiment Distribution ---
             st.subheader("📊 Sentiment Distribution")
             counts = results_df['Sentiment'].value_counts().reset_index()
             counts.columns = ["Sentiment", "Count"]
-            chart = alt.Chart(counts).mark_bar().encode(
+            bar_chart = alt.Chart(counts).mark_bar().encode(
                 x='Sentiment',
                 y='Count',
                 color='Sentiment',
                 tooltip=['Sentiment', 'Count']
             ).properties(width=600)
-            st.altair_chart(chart)
+            st.altair_chart(bar_chart)
 
-            # Topic Modeling
-            st.subheader("🧠 Topic Modeling (LDA - Gensim)")
+            # --- Scatter Plot ---
+            st.subheader("📈 Sentiment Scatter Plot (Polarity vs Subjectivity)")
+            scatter_chart = alt.Chart(results_df).mark_circle(size=80).encode(
+                x=alt.X('Polarity', scale=alt.Scale(domain=[-1, 1])),
+                y=alt.Y('Subjectivity', scale=alt.Scale(domain=[0, 1])),
+                color=alt.Color('Sentiment', scale=alt.Scale(scheme='set1')),
+                tooltip=['Original', 'Polarity', 'Subjectivity', 'Sentiment']
+            ).properties(width=700, height=400).interactive()
+            st.altair_chart(scatter_chart)
+
+            # --- LDA Topic Modeling ---
+            st.subheader("🧠 Topic Modeling (LDA)")
             num_topics = st.slider("Select Number of Topics", 3, 15, 5)
-
             processed_texts = prepare_gensim_data(results_df["Cleaned"].tolist())
             id2word = corpora.Dictionary(processed_texts)
             corpus = [id2word.doc2bow(text) for text in processed_texts]
 
             lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-            # Display Dictionary
-            st.markdown("**LDA Dictionary (Token to ID Mapping):**")
+            st.markdown("**LDA Dictionary (token2id mapping):**")
             dict_df = pd.DataFrame(list(id2word.token2id.items()), columns=["Token", "ID"])
             st.dataframe(dict_df)
 
-            # Display Topics
             st.markdown("**LDA Topics:**")
             for idx, topic in lda_model.print_topics():
                 st.write(f"**Topic {idx+1}:** {topic}")
 
-            # Interactive Visualization
+            # --- pyLDAvis Interactive ---
             st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
             with st.spinner("Generating pyLDAvis..."):
                 vis = gensimvis.prepare(lda_model, corpus, id2word)
@@ -185,4 +175,4 @@ if uploaded_file:
         st.error(f"An error occurred: {e}")
 
 else:
-    st.info("Please upload your dataset to begin analysis.")
+    st.info("Please upload a dataset to begin analysis.")
