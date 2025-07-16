@@ -8,3 +8,4 @@ altair
 pyLDAvis
 scikit-learn
 Pillow
+openpyxl
