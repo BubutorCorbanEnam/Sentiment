@@ -123,8 +123,8 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
 
 # --- Streamlit Application Layout ---
 
-st.set_page_config(layout="wide", page_title="Text Analysis Tool")
-st.title("Text Analysis Tool 📝")
+#st.set_page_config(layout="wide", page_title="Text Analysis Tool")
+#st.title("Text Analysis Tool 📝")
 st.markdown("Upload your text data (CSV, Excel, or TXT) to perform sentiment analysis, generate word clouds, and discover topics using LDA.")
 
 # --- File Upload Section ---
