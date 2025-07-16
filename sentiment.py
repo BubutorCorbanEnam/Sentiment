@@ -254,7 +254,7 @@ if uploaded_file:
                     num_topics = st.slider(
                         "Select Number of Topics for LDA (More topics can be harder to interpret)", 
                         min_value=3, 
-                        max_value=max_topics, 
+                        max_value=20, 
                         value=min(5, max_topics), # Default to 5 or max_topics if smaller
                         step=1
                     )
