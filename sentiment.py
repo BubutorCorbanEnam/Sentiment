@@ -197,7 +197,7 @@ if st.session_state["sentiment_df"] is not None:
         st.session_state["lda_model"] = lda_model
 
         st.subheader("🔑 Top Words per Topic")
-        for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=10, formatted=False):
+        for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=30, formatted=False):
             words = ", ".join([w for w, p in topic])
             st.write(f"**Topic {idx+1}:** {words}")
 
@@ -286,33 +286,37 @@ if st.session_state["sentiment_df"] is not None:
             # Prepare topic_names list (unique topic labels)
             topic_names = list(df_1['Topic'].unique())
 
-            # Create a sample topic_polarity_matrix as similarity/proximity between topics
-            # For demo, let's create a random symmetric matrix with zeros on diagonal
-            n_topics = len(topic_names)
-            # Replace the below with your actual matrix if you have one
-            np.random.seed(42)
-            random_matrix = np.random.rand(n_topics, n_topics)
-            topic_polarity_matrix = (random_matrix + random_matrix.T) / 2  # Symmetric
+            # Create the sentiment distribution matrix per topic (percentages)
+            df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
+
+            # Ensure order of topics matches topic_names
+            df_topic_sentiment = df_topic_sentiment.loc[topic_names]
+
+            # Compute cosine similarity between topic sentiment distributions
+            topic_polarity_matrix = cosine_similarity(df_topic_sentiment)
+
+            # Zero out diagonal to avoid self loops
             np.fill_diagonal(topic_polarity_matrix, 0)
 
-            # You can optionally threshold the matrix to keep only strong edges
+            # Threshold for edges
             threshold = 0.5
 
-            # Build graph
+            # Build graph with nodes and weighted edges
             G = nx.Graph()
             G.add_nodes_from(topic_names)
 
-            for i in range(n_topics):
-                for j in range(n_topics):
-                    if topic_polarity_matrix[i][j] > threshold:
-                        G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
+            for i in range(len(topic_names)):
+                for j in range(i + 1, len(topic_names)):
+                    weight = topic_polarity_matrix[i][j]
+                    if weight > threshold:
+                        G.add_edge(topic_names[i], topic_names[j], weight=weight)
 
-            # Draw graph using networkx and matplotlib
+            # Draw the graph
             plt.figure(figsize=(12, 8))
             pos = nx.spring_layout(G, seed=42)
             nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
 
-            # Edge labels with weights
+            # Draw edge labels (weights)
             edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
 
