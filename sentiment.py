@@ -79,16 +79,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------- Session State Password -----------------
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+#if "authenticated" not in st.session_state:
+#    st.session_state["authenticated"] = False
 
-if not st.session_state["authenticated"]:
-    password = st.text_input("🔒 Enter Password:", type="password")
-    if password == "CORBAN":
-        st.session_state["authenticated"] = True
-        st.success("Access granted. Welcome!")
-    else:
-        st.stop()
+#if not st.session_state["authenticated"]:
+#    password = st.text_input("🔒 Enter Password:", type="password")
+#    if password == "CORBAN":
+#        st.session_state["authenticated"] = True
+#        st.success("Access granted. Welcome!")
+#    else:
+#        st.stop()
 
 # Download NLTK resources
 nltk.download('punkt_tab', quiet=True)
