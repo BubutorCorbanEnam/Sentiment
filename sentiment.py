@@ -30,6 +30,16 @@ with col2:
     st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
 
 st.markdown("---")
+
+# ------------------ PROFESSIONAL BACKGROUND ------------------
+with st.expander("ℹ️ About this App"):
+    st.markdown("""
+    Built by Bubutor Corban Enam after participating in an NLP training session organized by Professor Andy. This app allows users to analyze the sentiment of comments using natural language processing.
+    
+    It supports both batch analysis via CSV upload and manual typing. Results include polarity, subjectivity, sentiment type, and visual insights. Ideal for researchers, marketers, and educators.
+    """)
+
+
 # ----------------- Session State Password -----------------
 #if "authenticated" not in st.session_state:
 #    st.session_state["authenticated"] = False
