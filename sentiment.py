@@ -16,6 +16,7 @@ import pyLDAvis
 import pyLDAvis.gensim_models as gensimvis
 from PIL import Image
 import matplotlib.pyplot as plt
+import networkx as nx
 import seaborn as sns
 
 # --- Setup ---
