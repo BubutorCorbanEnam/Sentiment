@@ -235,12 +235,12 @@ if st.session_state["sentiment_df"] is not None:
             vis_data = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             
             # Replace default topic labels with your custom labels in the visualization
-            for topic_num, label in st.session_state["topic_labels"].items():
+            custom_labels = st.session_state["topic_labels"]
+            for topic_num, label in custom_labels.items():
                 vis_data.topic_info.loc[
                     (vis_data.topic_info['Category'] == 'Topic') & 
-                    (vis_data.topic_info['Term'] == f"Topic {topic_num + 1}"),
-                    'Term'
-                ] = label
+                    (vis_data.topic_info['Topic'] == topic_num + 1),
+                   'Topic'] = f"{label} ({topic_num + 1})"
             
             html_string = pyLDAvis.prepared_data_to_html(vis_data)
             st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
