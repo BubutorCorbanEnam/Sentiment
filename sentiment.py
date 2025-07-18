@@ -10,6 +10,7 @@ from wordcloud import WordCloud
 import altair as alt
 import gensim
 from gensim.utils import simple_preprocess
+import numpy as np
 from gensim import corpora
 from sklearn.decomposition import LatentDirichletAllocation
 import pyLDAvis
