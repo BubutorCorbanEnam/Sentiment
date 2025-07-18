@@ -171,21 +171,6 @@ if uploaded_file:
                 ).interactive()
                 st.altair_chart(scatter)
 
-                # === Added: Subjectivity Sentiment Analysis Plot ===
-                st.subheader("📊 Subjectivity Sentiment Analysis")
-                fig1, ax1 = plt.subplots(figsize=(10, 6))
-                sns.countplot(
-                    data=sentiment_df,
-                    x='Type',
-                    palette='rocket',
-                    order=sentiment_df['Type'].value_counts().index,
-                    ax=ax1
-                )
-                ax1.set_title('Subjectivity Sentiment Analysis', fontsize=16)
-                ax1.set_xlabel('Type', fontsize=12)
-                ax1.set_ylabel('Counts', fontsize=12)
-                st.pyplot(fig1)
-
         except Exception as e:
             st.error(f"Error: {e}")
 
@@ -246,23 +231,53 @@ if st.session_state["sentiment_df"] is not None:
 
             st.dataframe(st.session_state["sentiment_df"])
 
-            # === Added: Topic Analysis Plot (Manual Labels) ===
-            st.subheader("📊 Topic Analysis (Based on Manual Labels)")
-            df_topic = st.session_state["sentiment_df"]
+            # Topic Analysis Plot
+            st.subheader("📊 Topic Analysis Based on Manual Labels")
+            df_1 = st.session_state["sentiment_df"].copy()
 
-            fig2, ax2 = plt.subplots(figsize=(10, 6))
-            sns.countplot(
-                data=df_topic,
-                x="Topic",
-                palette="flare",
-                order=df_topic['Topic'].value_counts().index,
-                ax=ax2
-            )
-            ax2.set_title('Topic Analysis (Manual Labels)', fontsize=16)
-            ax2.set_xlabel('Topic', fontsize=12)
-            ax2.set_ylabel('Counts', fontsize=12)
-            plt.xticks(rotation=45)
-            st.pyplot(fig2)
+            plt.figure(figsize=(15,10))
+            plt.title('Topic Analysis')
+            plt.xlabel('Topic')
+            plt.ylabel('Counts')
+            sns.barplot(x=df_1['Topic'].value_counts().index,
+                        y=df_1['Topic'].value_counts().values,
+                        palette=sns.color_palette('flare'))
+            st.pyplot(plt.gcf())
+            plt.clf()
+
+            # Topic Polarity Distribution Plot
+            st.subheader("📊 Topic Polarity Distribution")
+
+            # Create the polarity distribution dataframe (percentages)
+            df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
+
+            # Map TextBlob sentiments to simplified polarity classes to match color keys
+            # Your sentiment column has emojis, so let's map them properly:
+            polarity_map = {
+                "😠 Negative": "Negative",
+                "😐 Neutral": "Neutral",
+                "😊 Positive": "Positive"
+            }
+            df_topic_polarity.rename(columns=polarity_map, inplace=True)
+
+            color_mapping = {
+                'Negative': 'red',
+                'Neutral': 'yellow',
+                'Positive': 'green'
+            }
+
+            colors = [color_mapping.get(col, 'gray') for col in df_topic_polarity.columns]
+
+            ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(15, 10))
+
+            ax.set_xlabel('Topic')
+            ax.set_ylabel('% Polarity')
+            ax.set_title('Topic Polarity Distribution')
+            ax.set_xticklabels(df_topic_polarity.index, rotation=90)
+            ax.legend(title='Polarity')
+
+            st.pyplot(ax.get_figure())
+            plt.clf()
 
             st.subheader("📈 Interactive LDA Visualization")
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
