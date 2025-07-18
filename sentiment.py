@@ -255,31 +255,58 @@ if st.session_state["sentiment_df"] is not None:
             st.pyplot(ax.get_figure())
             plt.clf()
 
+            # --- NetworkX Graph based on actual topic polarity and manual topic labels ---
+            
             st.subheader("🔗 Topic Relationship Graph (Manual Topic Names)")
+            
+            # Use actual assigned topics in the dataframe (manual labels from assignment step)
+            df_1 = st.session_state["sentiment_df"].copy()
+            
+            # Ensure consistent sentiment columns for similarity calculation
             expected_sentiments = ["😠 Negative", "😐 Neutral", "😊 Positive"]
+            
+            # Compute sentiment proportions per topic
             df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack().fillna(0)
+            
+            # Ensure all expected sentiment columns exist
             for col in expected_sentiments:
                 if col not in df_topic_sentiment.columns:
                     df_topic_sentiment[col] = 0.0
+            
+            # Reorder columns to match expected sentiments
             df_topic_sentiment = df_topic_sentiment[expected_sentiments]
+            
+            # Compute cosine similarity matrix between topics
             topic_polarity_matrix = cosine_similarity(df_topic_sentiment.values)
-            np.fill_diagonal(topic_polarity_matrix, 0)
-
-            G = nx.Graph()
+            
+            # Use manually assigned topic names as nodes
             topic_names = df_topic_sentiment.index.tolist()
+            
+            # Zero diagonal to remove self-loops
+            np.fill_diagonal(topic_polarity_matrix, 0)
+            
+            # Create graph
+            G = nx.Graph()
             G.add_nodes_from(topic_names)
+            
+            # Add edges where similarity > threshold
             threshold = 0.5
             for i in range(len(topic_names)):
                 for j in range(i+1, len(topic_names)):
                     weight = topic_polarity_matrix[i][j]
                     if weight > threshold:
                         G.add_edge(topic_names[i], topic_names[j], weight=weight)
-
+            
+            # Draw the graph
             plt.figure(figsize=(12, 8))
             pos = nx.spring_layout(G, seed=42)
-            nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightgreen', node_size=1600, edge_color='gray')
+            
+            nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
+            
+            # Draw edge labels with weights
             edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+            
             st.pyplot(plt.gcf())
             plt.clf()
 
