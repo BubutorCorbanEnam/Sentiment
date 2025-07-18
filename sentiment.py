@@ -252,8 +252,6 @@ if st.session_state["sentiment_df"] is not None:
             # Create the polarity distribution dataframe (percentages)
             df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
 
-            # Map TextBlob sentiments to simplified polarity classes to match color keys
-            # Your sentiment column has emojis, so let's map them properly:
             polarity_map = {
                 "😠 Negative": "Negative",
                 "😐 Neutral": "Neutral",
@@ -280,6 +278,47 @@ if st.session_state["sentiment_df"] is not None:
             st.pyplot(ax.get_figure())
             plt.clf()
 
+            # --- NetworkX Graph based on topic polarity matrix ---
+
+            st.subheader("🔗 Topic Relationship Graph")
+
+            # Prepare topic_names list (unique topic labels)
+            topic_names = list(df_1['Topic'].unique())
+
+            # Create a sample topic_polarity_matrix as similarity/proximity between topics
+            # For demo, let's create a random symmetric matrix with zeros on diagonal
+            n_topics = len(topic_names)
+            # Replace the below with your actual matrix if you have one
+            np.random.seed(42)
+            random_matrix = np.random.rand(n_topics, n_topics)
+            topic_polarity_matrix = (random_matrix + random_matrix.T) / 2  # Symmetric
+            np.fill_diagonal(topic_polarity_matrix, 0)
+
+            # You can optionally threshold the matrix to keep only strong edges
+            threshold = 0.5
+
+            # Build graph
+            G = nx.Graph()
+            G.add_nodes_from(topic_names)
+
+            for i in range(n_topics):
+                for j in range(n_topics):
+                    if topic_polarity_matrix[i][j] > threshold:
+                        G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
+
+            # Draw graph using networkx and matplotlib
+            plt.figure(figsize=(12, 8))
+            pos = nx.spring_layout(G, seed=42)
+            nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
+
+            # Edge labels with weights
+            edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+            st.pyplot(plt.gcf())
+            plt.clf()
+
+            # Interactive LDA Visualization
             st.subheader("📈 Interactive LDA Visualization")
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             html_string = pyLDAvis.prepared_data_to_html(vis)
