@@ -9,3 +9,4 @@ pyLDAvis
 scikit-learn
 Pillow
 openpyxl
+seaborn
