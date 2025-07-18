@@ -135,8 +135,6 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
         id2word=_id2word,
         num_topics=num_topics,
         random_state=50, # For reproducibility
-        passes=3,         # Number of passes through the corpus during training
-        iterations=20,    # Number of iterations for each document
         per_word_topics=True # To enable pyLDAvis visualization
     )
     return lda_model
