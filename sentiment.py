@@ -11,10 +11,11 @@ import altair as alt
 import gensim
 from gensim.utils import simple_preprocess
 from gensim import corpora
-from sklearn.decomposition import LatentDirichletAllocation
 import pyLDAvis
 import pyLDAvis.gensim_models as gensimvis
 from PIL import Image
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- Setup ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
@@ -197,7 +198,7 @@ if st.session_state["sentiment_df"] is not None:
             words = ", ".join([w for w, p in topic])
             st.write(f"**Topic {idx+1}:** {words}")
 
-# --- Manual Topic Assignment (No Restart with Form) ---
+# --- Manual Topic Assignment ---
     if st.session_state["lda_model"]:
         st.markdown("---")
         st.subheader("📝 Assign Custom Labels to Topics")
@@ -210,7 +211,6 @@ if st.session_state["sentiment_df"] is not None:
             submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
 
         if submit_labels:
-            # Assign topics to each cleaned comment
             topic_assignments = []
             for bow in corpus:
                 topic_probs = st.session_state["lda_model"].get_document_topics(bow)
@@ -221,7 +221,6 @@ if st.session_state["sentiment_df"] is not None:
                 else:
                     topic_assignments.append("Unassigned")
 
-            # Assign topics only to valid cleaned text rows
             non_empty_mask = st.session_state["sentiment_df"]["Cleaned"].notnull()
             st.session_state["sentiment_df"].loc[non_empty_mask, "Topic"] = topic_assignments
 
@@ -233,6 +232,37 @@ if st.session_state["sentiment_df"] is not None:
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             html_string = pyLDAvis.prepared_data_to_html(vis)
             st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+
+            # --- Additional Plots ---
+            st.subheader("📊 Subjectivity Sentiment Analysis")
+            fig1, ax1 = plt.subplots(figsize=(10, 6))
+            sns.countplot(
+                data=st.session_state["sentiment_df"],
+                x="Type",
+                palette="rocket",
+                order=st.session_state["sentiment_df"]['Type'].value_counts().index,
+                ax=ax1
+            )
+            ax1.set_title('Subjectivity Sentiment Analysis', fontsize=16)
+            ax1.set_xlabel('Sentiment Type', fontsize=12)
+            ax1.set_ylabel('Counts', fontsize=12)
+            plt.xticks(rotation=45)
+            st.pyplot(fig1)
+
+            st.subheader("📊 Topic Analysis (Based on Manual Labels)")
+            fig2, ax2 = plt.subplots(figsize=(10, 6))
+            sns.countplot(
+                data=st.session_state["sentiment_df"],
+                x="Topic",
+                palette="flare",
+                order=st.session_state["sentiment_df"]['Topic'].value_counts().index,
+                ax=ax2
+            )
+            ax2.set_title('Topic Analysis', fontsize=16)
+            ax2.set_xlabel('Assigned Topic', fontsize=12)
+            ax2.set_ylabel('Counts', fontsize=12)
+            plt.xticks(rotation=45)
+            st.pyplot(fig2)
 
 else:
     st.info("Upload data and run sentiment analysis first to enable topic modeling.")
