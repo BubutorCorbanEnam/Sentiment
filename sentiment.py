@@ -40,7 +40,7 @@ with st.expander("ℹ️ About this App"):
     """)
 
 # --- NLTK Setup ---
-nltk.download('punkt')
+nltk.download('punkt_tab')
 nltk.download('stopwords')
 nltk.download('wordnet')
 stop_words = set(stopwords.words('english'))
