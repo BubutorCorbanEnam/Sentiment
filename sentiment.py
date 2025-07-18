@@ -21,7 +21,7 @@ st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered"
 # --- University Branding ---
 col1, col2 = st.columns([1, 8])
 with col1:
-    logo = Image.open("ucc.png")  # Make sure ucc.png is in your directory
+    logo = Image.open("ucc.png")  # Make sure ucc.png is in the project directory
     st.image(logo, width=80)
 with col2:
     st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
@@ -29,15 +29,20 @@ with col2:
 
 st.markdown("---")
 
-# --- NLTK setup ---
+# ------------------ PROFESSIONAL BACKGROUND ------------------
+with st.expander("ℹ️ About this App"):
+    st.markdown("""
+    Built by Bubutor Corban Enam after participating in an NLP training session organized by Professor Andy. This app allows users to analyze the sentiment of comments using natural language processing.
+
+    It supports both batch analysis via CSV upload and manual typing. Results include polarity, subjectivity, sentiment type, and visual insights. Ideal for researchers, marketers, and educators.
+    """)
+
 nltk.download('punkt', quiet=True)
 nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
-
-# --- Functions ---
 
 def clean_text(text):
     text = str(text).lower()
@@ -79,7 +84,6 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
     )
     return lda_model
 
-# --- File upload ---
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
@@ -91,36 +95,42 @@ if uploaded_file:
         elif uploaded_file.name.endswith(".txt"):
             df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
         else:
-            st.error("Unsupported file format.")
+            st.error("🚨 Unsupported file format. Please upload a CSV, Excel, or TXT file.")
             st.stop()
 
         text_cols = df.select_dtypes(include="object").columns.tolist()
         if not text_cols:
-            st.warning("No text columns found in your file.")
+            st.warning("⚠️ No text columns found in the uploaded file. Please ensure your file contains text data.")
             st.stop()
+
         selected_col = st.selectbox("Select Text Column for Analysis", text_cols)
 
-        # --- Sentiment Analysis ---
+        # CLEAN ONLY NON-NULL TEXTS
+        non_null_texts = df[selected_col].dropna().copy()
+        cleaned_texts = non_null_texts.apply(clean_text)
+
+        # --- Sentiment Analysis and Word Cloud on CLEANED texts ---
         if st.button("🔍 Run Sentiment Analysis & Word Cloud"):
             with st.spinner("Analyzing sentiment and generating word cloud..."):
                 results = []
-                for comment in df[selected_col].dropna():
-                    cleaned = clean_text(comment)
-                    polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
+                for orig_text, clean_text_ in zip(non_null_texts, cleaned_texts):
+                    polarity, subjectivity, sentiment, opinion = analyze_sentiment(clean_text_)
                     results.append({
-                        "Original Comment": comment,
-                        "Cleaned Text": cleaned,
+                        "Original Comment": orig_text,
+                        "Cleaned Text": clean_text_,
                         "Polarity": polarity,
                         "Subjectivity": subjectivity,
                         "Sentiment": sentiment,
                         "Type": opinion
                     })
+
                 results_df = pd.DataFrame(results)
+
                 st.subheader("🗂️ Sentiment Analysis Results")
                 st.dataframe(results_df)
 
                 st.download_button(
-                    "📥 Download Sentiment Results CSV",
+                    label="📥 Download Sentiment Results CSV",
                     data=results_df.to_csv(index=False).encode('utf-8'),
                     file_name="sentiment_results.csv",
                     mime="text/csv"
@@ -128,62 +138,63 @@ if uploaded_file:
 
                 st.markdown("---")
                 st.subheader("☁️ Word Cloud")
-                all_text = " ".join(results_df["Cleaned Text"].tolist())
-                if all_text.strip():
-                    wc_img = generate_wordcloud(all_text)
-                    st.image(wc_img.to_array(), use_container_width=True)
+                all_cleaned_text = " ".join(results_df["Cleaned Text"].tolist())
+                if len(all_cleaned_text.strip()) > 0:
+                    wc_image = generate_wordcloud(all_cleaned_text)
+                    st.image(wc_image.to_array(), caption="Word Cloud of Cleaned Text", use_container_width=True)
                 else:
-                    st.info("Not enough text for word cloud.")
+                    st.info("ℹ️ Not enough cleaned text available to generate a meaningful Word Cloud.")
 
                 st.markdown("---")
                 st.subheader("📊 Sentiment Distribution")
                 counts = results_df['Sentiment'].value_counts().reset_index()
                 counts.columns = ["Sentiment", "Count"]
                 chart = alt.Chart(counts).mark_bar().encode(
-                    x=alt.X('Sentiment', sort='-y'),
-                    y='Count',
-                    color='Sentiment',
+                    x=alt.X('Sentiment', sort="-y", title="Sentiment Category"),
+                    y=alt.Y('Count', title="Number of Comments"),
+                    color=alt.Color('Sentiment', legend=None),
                     tooltip=['Sentiment', 'Count']
+                ).properties(
+                    title="Distribution of Sentiment Categories"
                 )
                 st.altair_chart(chart, use_container_width=True)
 
                 st.markdown("---")
                 st.subheader("🎯 Sentiment Scatter Plot")
                 scatter_chart = alt.Chart(results_df).mark_circle(size=80, opacity=0.7).encode(
-                    x='Polarity',
-                    y='Subjectivity',
-                    color='Sentiment',
+                    x=alt.X('Polarity', title='Polarity (Negative to Positive)'),
+                    y=alt.Y('Subjectivity', title='Subjectivity (Fact to Opinion)'),
+                    color=alt.Color('Sentiment', legend=alt.Legend(title="Sentiment")),
                     tooltip=['Original Comment', 'Polarity', 'Subjectivity', 'Sentiment']
-                ).interactive()
+                ).interactive().properties(
+                    title="Polarity vs. Subjectivity of Comments"
+                )
                 st.altair_chart(scatter_chart, use_container_width=True)
 
-        # --- LDA Topic Modeling ---
+        # --- LDA Topic Modeling on CLEANED texts ---
         st.markdown("---")
-        st.header("🧠 Topic Modeling (LDA)")
+        st.header("🧠 Topic Modeling (Latent Dirichlet Allocation - LDA)")
+        st.write("LDA helps identify underlying topics in your text data.")
 
-        # Prepare data and keep track of original indices
-        original_texts = df[selected_col].dropna()
-        cleaned_texts = original_texts.apply(clean_text)
-        cleaned_indices = cleaned_texts.index.tolist()
-        processed_texts = prepare_gensim_data(cleaned_texts.tolist())
+        processed_texts_for_lda = prepare_gensim_data(cleaned_texts.tolist())
 
-        if len(processed_texts) < 3:
-            st.warning("Not enough data for LDA. Need at least 3 documents.")
+        if not processed_texts_for_lda:
+            st.warning("⚠️ No valid text found for topic modeling after cleaning. Please check your data.")
         else:
-            id2word = corpora.Dictionary(processed_texts)
+            id2word = corpora.Dictionary(processed_texts_for_lda)
             id2word.filter_extremes(no_below=5, no_above=0.5)
-            corpus = [id2word.doc2bow(text) for text in processed_texts]
+            corpus = [id2word.doc2bow(text) for text in processed_texts_for_lda]
             corpus = [doc for doc in corpus if doc]
 
             if len(corpus) < 3 or len(id2word) < 3:
-                st.warning("Not enough data or vocabulary for LDA after filtering.")
+                st.warning("⚠️ Not enough unique documents or vocabulary for LDA topic modeling. Need at least 3 documents and 3 unique words after processing.")
             else:
-                max_topics = min(20, len(corpus)-1, len(id2word))
+                max_topics = min(20, len(corpus) - 1, len(id2word))
                 if max_topics < 3:
-                    st.warning(f"Insufficient data for 3 topics, max possible: {max_topics}")
+                    st.warning(f"⚠️ Insufficient data to create at least 3 topics after filtering. Only {max_topics} topics can be generated.")
                 else:
                     num_topics = st.slider(
-                        "Select Number of Topics (max 20)",
+                        "Select Number of Topics for LDA (More topics can be harder to interpret)",
                         min_value=3,
                         max_value=max_topics,
                         value=min(5, max_topics),
@@ -191,55 +202,61 @@ if uploaded_file:
                     )
 
                     if st.button("🚀 Run LDA Topic Analysis"):
-                        with st.spinner(f"Training LDA model with {num_topics} topics..."):
-                            lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                        with st.spinner(f"Training LDA model with {num_topics} topics... This might take a moment."):
+                            try:
+                                lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
 
-                            # Show topics with top words
-                            st.subheader("📝 LDA Topics and Top Words")
-                            lda_topics = lda_model.show_topics(num_topics=num_topics, num_words=10, formatted=False)
-                            topic_word_strings = []
-                            for topic_num, word_probs in lda_topics:
-                                words_str = " + ".join([f'{round(prob,3)}*"{word}"' for word, prob in word_probs])
-                                topic_word_strings.append(f"{topic_num}: {words_str}")
-                                st.markdown(f"**Topic {topic_num}:** {words_str}")
+                                st.markdown("### 📊 Top Words Per Topic")
+                                lda_topics = lda_model.show_topics(num_topics=num_topics, num_words=10, formatted=False)
+                                for topic_num, word_probs in lda_topics:
+                                    words_str = " + ".join([f'{round(prob,3)}*"{word}"' for word, prob in word_probs])
+                                    st.write(f"**Topic {topic_num}:** {words_str}")
 
-                            # Custom labels input
-                            st.subheader("✏️ Assign Meaningful Labels to Each Topic")
-                            custom_labels = []
-                            for i in range(num_topics):
-                                label = st.text_input(f"Label for Topic {i}", key=f"topic_label_{i}")
-                                custom_labels.append(label)
+                                st.subheader("✏️ Assign Meaningful Labels to Each Topic")
+                                labels = []
+                                for i in range(num_topics):
+                                    label = st.text_input(f"Label for Topic {i}", key=f"topic_label_{i}")
+                                    labels.append(label)
 
-                            # Assign topics to documents
-                            if st.button("🗂️ Assign Topics to Comments"):
-                                topic_assignments = []
-                                for bow in corpus:
-                                    doc_topics = lda_model.get_document_topics(bow)
-                                    dominant_topic = max(doc_topics, key=lambda x: x[1])[0]
-                                    topic_assignments.append(dominant_topic)
+                                if st.button("🗂️ Assign Topics to Comments"):
+                                    topic_assignments = []
+                                    for bow in corpus:
+                                        doc_topics = lda_model.get_document_topics(bow)
+                                        dominant_topic = max(doc_topics, key=lambda x: x[1])[0]
+                                        topic_assignments.append(dominant_topic)
 
-                                df["Topic Number"] = None
-                                df["Topic Label"] = None
-                                for idx, topic_num in zip(cleaned_indices, topic_assignments):
-                                    df.at[idx, "Topic Number"] = topic_num
-                                    assigned_label = custom_labels[topic_num].strip() if custom_labels[topic_num].strip() else f"Topic {topic_num}"
-                                    df.at[idx, "Topic Label"] = assigned_label
+                                    # Create DataFrame for the cleaned subset with topic assignments
+                                    lda_results_df = pd.DataFrame({
+                                        selected_col: non_null_texts.values,
+                                        "Cleaned Text": cleaned_texts.values,
+                                        "Topic Number": topic_assignments
+                                    })
 
-                                st.subheader("📊 Comments with Assigned Topics")
-                                st.dataframe(df[[selected_col, "Topic Number", "Topic Label"]].dropna(subset=["Topic Number"]))
+                                    # Assign user labels if provided, else fallback topic number
+                                    lda_results_df["Topic Label"] = lda_results_df["Topic Number"].apply(
+                                        lambda x: labels[x].strip() if labels[x].strip() else f"Topic {x}"
+                                    )
 
-                                csv = df[[selected_col, "Topic Number", "Topic Label"]].dropna(subset=["Topic Number"]).to_csv(index=False).encode('utf-8')
-                                st.download_button("📥 Download Comments with Topics", data=csv, file_name="comments_with_topics.csv", mime="text/csv")
+                                    st.subheader("📊 Comments with Assigned Topics")
+                                    st.dataframe(lda_results_df)
 
-                            # PyLDAvis Visualization
-                            st.markdown("---")
-                            st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                            with st.spinner("Generating visualization..."):
-                                vis = gensimvis.prepare(lda_model, corpus, id2word)
-                                html_string = pyLDAvis.prepared_data_to_html(vis)
-                                st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+                                    csv = lda_results_df.to_csv(index=False).encode('utf-8')
+                                    st.download_button("📥 Download Comments with Topics", data=csv, file_name="comments_with_topics.csv", mime="text/csv")
+
+                                st.markdown("---")
+                                st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                                with st.spinner("Generating interactive visualization..."):
+                                    vis = gensimvis.prepare(lda_model, corpus, id2word)
+                                    html_string = pyLDAvis.prepared_data_to_html(vis)
+                                    st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+
+                            except Exception as e:
+                                st.error(f"An error occurred during LDA topic modeling: {e}")
+                                st.warning("Try reducing the number of topics or ensuring diverse data.")
 
     except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+        st.error(f"An unexpected error occurred while processing your file: {e}")
+        st.info("Please ensure your file is correctly formatted and the selected column contains text data.")
+
 else:
-    st.info("☝️ Please upload a dataset (CSV, Excel, or TXT) to begin!")
+    st.info("☝️ Please upload a dataset (CSV, Excel, or TXT) to begin your text analysis journey!")
