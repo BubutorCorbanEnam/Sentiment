@@ -31,8 +31,7 @@ st.markdown("---")
 # --- About ---
 with st.expander("ℹ️ About this App"):
     st.markdown("""
-    Built by Bubutor Corban Enam after participating in an NLP training session organized by Professor Andy. 
-    This app allows users to analyze sentiment and extract topics from text data using LDA.
+    This app performs sentiment analysis and allows manual assignment of LDA topic labels based on top words per topic.
     """)
 
 # --- NLTK Downloads ---
@@ -59,10 +58,6 @@ def analyze_sentiment(text):
     opinion = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion
 
-def generate_wordcloud(text):
-    wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
-    return wc.generate(text)
-
 def prepare_gensim_data(texts):
     custom_stopwords = stop_words.union({'from', 'subject', 're', 'edu', 'use'})
     processed_texts = [
@@ -88,135 +83,109 @@ def train_gensim_lda_model(_corpus, _id2word, num_topics):
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".txt"):
-            df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
-        else:
-            st.error("🚨 Unsupported file format.")
-            st.stop()
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    elif uploaded_file.name.endswith((".xlsx", ".xls")):
+        df = pd.read_excel(uploaded_file)
+    elif uploaded_file.name.endswith(".txt"):
+        df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
+    else:
+        st.error("🚨 Unsupported file format.")
+        st.stop()
 
-        text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select Text Column", text_cols)
+    text_cols = df.select_dtypes(include="object").columns.tolist()
+    selected_col = st.selectbox("Select Text Column", text_cols)
 
-        if st.button("🔍 Run Sentiment Analysis & Word Cloud"):
-            results = []
-            for comment in df[selected_col].dropna():
-                cleaned = clean_text(comment)
-                polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
-                results.append({
-                    "Original Comment": comment,
-                    "Cleaned Text": cleaned,
-                    "Polarity": polarity,
-                    "Subjectivity": subjectivity,
-                    "Sentiment": sentiment,
-                    "Type": opinion
-                })
+    # --- Sentiment Analysis ---
+    if st.button("🔍 Run Sentiment Analysis"):
+        results = []
+        for comment in df[selected_col].dropna():
+            cleaned = clean_text(comment)
+            polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
+            results.append({
+                "Original Comment": comment,
+                "Cleaned Text": cleaned,
+                "Polarity": polarity,
+                "Subjectivity": subjectivity,
+                "Sentiment": sentiment,
+                "Type": opinion
+            })
 
-            sentiment_df = pd.DataFrame(results)
+        sentiment_df = pd.DataFrame(results)
+        st.session_state["sentiment_df"] = sentiment_df
+        st.dataframe(sentiment_df)
 
-            st.session_state["sentiment_df"] = sentiment_df  # Save to session for later use
+    # --- Topic Modeling ---
+    if "sentiment_df" in st.session_state:
+        sentiment_df = st.session_state["sentiment_df"]
+        st.markdown("---")
+        st.header("🧠 LDA Topic Modeling (Manual Topic Assignment)")
 
-            st.subheader("🗂️ Sentiment Analysis Results")
-            st.dataframe(sentiment_df)
+        clean_texts = sentiment_df["Cleaned Text"].tolist()
+        processed_texts = prepare_gensim_data(clean_texts)
 
-            st.download_button(
-                "📥 Download Sentiment CSV",
-                sentiment_df.to_csv(index=False),
-                file_name="sentiment_results.csv"
-            )
+        id2word = corpora.Dictionary(processed_texts)
+        id2word.filter_extremes(no_below=5, no_above=0.5)
+        corpus = [id2word.doc2bow(text) for text in processed_texts]
+        corpus = [doc for doc in corpus if doc]
 
-            st.subheader("☁️ Word Cloud")
-            all_text = " ".join(sentiment_df["Cleaned Text"].tolist())
-            wc_image = generate_wordcloud(all_text)
-            st.image(wc_image.to_array(), use_container_width=True)
+        max_topics = min(20, len(corpus)-1, len(id2word))
+        num_topics = st.slider("Select Number of Topics", 3, max_topics, 5)
 
-            st.subheader("📊 Sentiment Distribution")
-            counts = sentiment_df['Sentiment'].value_counts().reset_index()
-            counts.columns = ["Sentiment", "Count"]
-            chart = alt.Chart(counts).mark_bar().encode(
-                x=alt.X('Sentiment', sort="-y"),
-                y='Count',
-                color='Sentiment'
-            ).properties(width=600)
-            st.altair_chart(chart)
+        if st.button("🚀 Run LDA and Show Words per Topic"):
+            lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+            st.session_state["lda_model"] = lda_model
+            st.session_state["corpus"] = corpus
+            st.session_state["id2word"] = id2word
 
-            st.subheader("🎯 Sentiment Scatter Plot")
-            scatter = alt.Chart(sentiment_df).mark_circle(size=80).encode(
-                x=alt.X('Polarity', title='Polarity'),
-                y=alt.Y('Subjectivity', title='Subjectivity'),
-                color='Sentiment',
-                tooltip=['Original Comment', 'Polarity', 'Subjectivity']
-            ).interactive().properties(width=700)
-            st.altair_chart(scatter)
+            # Show dictionary of top words per topic
+            st.subheader("📋 Top Words Per Topic (Dictionary Style)")
+            for idx, topic in lda_model.print_topics(num_words=10):
+                st.write(f"**Topic {idx}:** {topic}")
 
-        # --- LDA Topic Modeling ---
-        if "sentiment_df" in st.session_state:
-            st.markdown("---")
-            st.header("🧠 Topic Modeling (LDA)")
+            # Save raw topics to session for manual labeling
+            st.session_state["raw_topics"] = lda_model.print_topics(num_words=10)
 
-            sentiment_df = st.session_state["sentiment_df"]
-            clean_texts = sentiment_df["Cleaned Text"].tolist()
-            processed_texts = prepare_gensim_data(clean_texts)
+        # --- Manual Topic Assignment ---
+        if "raw_topics" in st.session_state:
+            st.subheader("📝 Assign Custom Topic Names Based on the Top Words")
 
-            id2word = corpora.Dictionary(processed_texts)
-            id2word.filter_extremes(no_below=5, no_above=0.5)
-            corpus = [id2word.doc2bow(text) for text in processed_texts]
-            corpus = [doc for doc in corpus if doc]
+            if "custom_topic_labels" not in st.session_state:
+                st.session_state["custom_topic_labels"] = {}
 
-            max_topics = min(20, len(corpus)-1, len(id2word))
-            num_topics = st.slider("Select Number of Topics", 3, max_topics, 5)
+            for idx, topic in st.session_state["raw_topics"]:
+                default_label = st.session_state["custom_topic_labels"].get(idx, f"Topic {idx+1}")
+                label = st.text_input(f"Custom name for Topic {idx+1}", default_label, key=f"custom_label_{idx}")
+                st.session_state["custom_topic_labels"][idx] = label
 
-            if st.button("🚀 Run LDA Topic Modeling"):
-                lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
-                st.session_state["lda_model"] = lda_model
-                st.session_state["corpus"] = corpus
-                st.session_state["id2word"] = id2word
-
-            # --- Topic Assignment ---
-            if "lda_model" in st.session_state:
+            if st.button("✅ Finalize Topic Assignment & Visualize"):
+                topic_labels = st.session_state["custom_topic_labels"]
                 lda_model = st.session_state["lda_model"]
                 corpus = st.session_state["corpus"]
                 id2word = st.session_state["id2word"]
 
-                st.subheader("📝 Assign Topics")
-                if "topic_labels" not in st.session_state:
-                    st.session_state["topic_labels"] = {}
+                # Assign topics to documents
+                topic_assignments = []
+                for doc in corpus:
+                    topic_dist = lda_model.get_document_topics(doc)
+                    if topic_dist:
+                        top_topic = max(topic_dist, key=lambda x: x[1])[0]
+                        topic_name = topic_labels.get(top_topic, f"Topic {top_topic+1}")
+                        topic_assignments.append(topic_name)
+                    else:
+                        topic_assignments.append("Unassigned")
 
-                for idx, topic in lda_model.print_topics(num_words=10):
-                    default = st.session_state["topic_labels"].get(idx, f"Topic {idx+1}")
-                    label = st.text_input(f"Label for Topic {idx+1}", default, key=f"label_{idx}")
-                    st.session_state["topic_labels"][idx] = label
+                sentiment_df["Topic"] = "Unassigned"
+                non_empty_mask = sentiment_df["Cleaned Text"].str.strip() != ""
+                sentiment_df.loc[non_empty_mask, "Topic"] = topic_assignments
 
-                if st.button("✅ Finalize Topic Assignment & Visualize"):
-                    topic_labels = st.session_state["topic_labels"]
+                st.dataframe(sentiment_df)
 
-                    topic_assignments = []
-                    for doc in corpus:
-                        topic_dist = lda_model.get_document_topics(doc)
-                        if topic_dist:
-                            top_topic = max(topic_dist, key=lambda x: x[1])[0]
-                            topic_name = topic_labels.get(top_topic, f"Topic {top_topic+1}")
-                            topic_assignments.append(topic_name)
-                        else:
-                            topic_assignments.append("Unassigned")
+                # --- Interactive LDA Visualization ---
+                st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                vis = gensimvis.prepare(lda_model, corpus, id2word)
+                html_string = pyLDAvis.prepared_data_to_html(vis)
+                st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
 
-                    sentiment_df["Topic"] = "Unassigned"
-                    non_empty_mask = sentiment_df["Cleaned Text"].str.strip() != ""
-                    sentiment_df.loc[non_empty_mask, "Topic"] = topic_assignments
-
-                    st.dataframe(sentiment_df)
-
-                    st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                    vis = gensimvis.prepare(lda_model, corpus, id2word)
-                    html_string = pyLDAvis.prepared_data_to_html(vis)
-                    st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
-
-    except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
-
-else:
-    st.info("☝️ Upload a dataset (CSV, Excel, or TXT) to begin analysis.")
+                # --- Export Final Data ---
+                st.download_button("📥 Download LDA Results", sentiment_df.to_csv(index=False), "lda_results.csv")
