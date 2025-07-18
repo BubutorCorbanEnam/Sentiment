@@ -10,3 +10,4 @@ scikit-learn
 Pillow
 openpyxl
 seaborn
+networkx
