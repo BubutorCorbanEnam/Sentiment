@@ -17,67 +17,19 @@ from PIL import Image
 import pyLDAvis
 import pyLDAvis.gensim_models as gensimvis
 
-# --- Streamlit Page Configuration (Must be the first Streamlit command) ---
+# --- Setup ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
-# --- Custom CSS (Consolidated and placed early) ---
-st.markdown("""
-    <style>
-        .main {
-            background-color: #f4f6f9;
-        }
-        h1, h2, h3, h4 {
-            color: #002147; /* Dark blue for headers */
-        }
-        .university-header {
-            background-color: #002147;
-            color: white;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-            text-align: center;
-        }
-        .stButton>button {
-            background-color: #002147;
-            color: white;
-            border-radius: 8px;
-            font-size: 16px;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .stButton>button:hover {
-            background-color: #0E4D92; /* Lighter blue on hover */
-        }
-        .stDownloadButton>button {
-            background-color: #FFD700; /* Gold */
-            color: black;
-            border-radius: 8px;
-            font-size: 16px;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .stDownloadButton>button:hover {
-            background-color: #E6C200; /* Darker gold on hover */
-        }
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            padding: 10px;
-        }
-        .stSelectbox>div>div>div {
-            border-radius: 8px;
-            border: 1px solid #ccc;
-        }
-        .stAlert {
-            border-radius: 8px;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# --- University Branding ---
+col1, col2 = st.columns([1, 8])
+with col1:
+    logo = Image.open("ucc.png")  # Ensure this file is in your project directory
+    st.image(logo, width=80)
+with col2:
+    st.markdown("<h2 style='color:#0E4D92; font-weight:bold;'>University of Cape Coast</h2>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color:#555;'>AI & Data Science | Sentiment Analysis Web App</h4>", unsafe_allow_html=True)
 
+st.markdown("---")
 # ----------------- Session State Password -----------------
 #if "authenticated" not in st.session_state:
 #    st.session_state["authenticated"] = False
