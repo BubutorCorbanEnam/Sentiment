@@ -34,7 +34,6 @@ nltk.download('wordnet', quiet=True)
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-# Functions
 def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
@@ -78,7 +77,6 @@ def train_gensim_lda_model(corpus, _id2word, num_topics):
     )
     return lda_model
 
-# App logic
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
@@ -86,6 +84,8 @@ if uploaded_file:
         st.session_state["sentiment_done"] = False
     if "sentiment_df" not in st.session_state:
         st.session_state["sentiment_df"] = None
+    if "topic_names" not in st.session_state:
+        st.session_state["topic_names"] = {}
 
     df = None
     if uploaded_file.name.endswith(".csv"):
@@ -130,26 +130,6 @@ if uploaded_file:
         wc_image = generate_wordcloud(all_cleaned_text)
         st.image(wc_image.to_array(), use_container_width=True)
 
-        st.subheader("📊 Sentiment Distribution")
-        counts = sentiment_df['Sentiment'].value_counts().reset_index()
-        counts.columns = ["Sentiment", "Count"]
-        chart = alt.Chart(counts).mark_bar().encode(
-            x=alt.X('Sentiment', sort="-y"),
-            y='Count',
-            color='Sentiment',
-            tooltip=['Sentiment', 'Count']
-        ).properties(width=600)
-        st.altair_chart(chart)
-
-        st.subheader("🎯 Sentiment Scatter Plot")
-        scatter_chart = alt.Chart(sentiment_df).mark_circle(size=80).encode(
-            x=alt.X('Polarity', title='Polarity'),
-            y=alt.Y('Subjectivity', title='Subjectivity'),
-            color='Sentiment',
-            tooltip=['Original Comment', 'Polarity', 'Subjectivity']
-        ).interactive().properties(width=700)
-        st.altair_chart(scatter_chart)
-
     if st.session_state["sentiment_done"]:
         st.markdown("---")
         st.header("🧠 Topic Modeling (LDA)")
@@ -163,47 +143,54 @@ if uploaded_file:
 
         if len(corpus) >= 3 and len(_id2word) >= 3:
             num_topics = st.slider("Select Number of Topics", 3, 20, 5)
-            if st.button("🚀 Run LDA Analysis"):
+
+            if "lda_model" not in st.session_state or st.session_state.get("num_topics") != num_topics:
                 lda_model = train_gensim_lda_model(corpus, _id2word, num_topics)
+                st.session_state["lda_model"] = lda_model
+                st.session_state["num_topics"] = num_topics
 
-                st.subheader("🔑 LDA Topics - Top Words")
-                topics = lda_model.print_topics(num_words=10)
-                for idx, topic in topics:
-                    st.write(f"**Topic {idx+1}:** {topic}")
+            lda_model = st.session_state["lda_model"]
+            topics = lda_model.print_topics(num_words=10)
 
-                topic_names = {}
-                st.subheader("✍️ Assign Descriptive Names to Topics")
-                for idx, _ in enumerate(topics):
-                    topic_names[idx] = st.text_input(f"Topic {idx+1} Name", key=f"topic_name_{idx}")
+            st.subheader("✍️ Assign Descriptive Names to Topics")
+            for idx, topic in topics:
+                default_name = st.session_state["topic_names"].get(idx, f"Topic {idx+1}")
+                new_name = st.text_input(f"Rename Topic {idx+1}: {topic}", value=default_name, key=f"topic_{idx}")
+                st.session_state["topic_names"][idx] = new_name
 
-                if st.button("✅ Finalize Topic Assignment"):
-                    topic_assignments = []
-                    for doc in corpus:
-                        topic_dist = lda_model.get_document_topics(doc)
-                        if topic_dist:
-                            top_topic = max(topic_dist, key=lambda x: x[1])[0]
-                            topic_assignments.append(topic_names.get(top_topic, f"Topic {top_topic+1}"))
-                        else:
-                            topic_assignments.append("Unassigned")
+            if st.button("✅ Finalize Topic Assignment & Visualize"):
+                topic_assignments = []
+                for doc in corpus:
+                    topic_dist = lda_model.get_document_topics(doc)
+                    if topic_dist:
+                        top_topic = max(topic_dist, key=lambda x: x[1])[0]
+                        topic_assignments.append(st.session_state["topic_names"].get(top_topic, f"Topic {top_topic+1}"))
+                    else:
+                        topic_assignments.append("Unassigned")
 
-                    st.session_state["sentiment_df"]["Topic"] = topic_assignments
-                    st.subheader("📝 Final Labeled Topics")
-                    st.dataframe(st.session_state["sentiment_df"])
+                st.session_state["sentiment_df"]["Topic"] = topic_assignments
+                st.subheader("📝 Final Labeled Topics")
+                st.dataframe(st.session_state["sentiment_df"])
 
-                    st.download_button(
-                        label="📥 Download LDA Topics CSV",
-                        data=st.session_state["sentiment_df"].to_csv(index=False).encode('utf-8'),
-                        file_name="lda_topics_assigned.csv",
-                        mime="text/csv"
-                    )
+                st.download_button(
+                    label="📥 Download Labeled Topics CSV",
+                    data=st.session_state["sentiment_df"].to_csv(index=False).encode('utf-8'),
+                    file_name="lda_topics_assigned.csv",
+                    mime="text/csv"
+                )
 
-                st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
-                with st.spinner("Generating visualization..."):
-                    vis = gensimvis.prepare(lda_model, corpus, _id2word)
-                    html_string = pyLDAvis.prepared_data_to_html(vis)
-                    st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+                # pyLDAvis with Custom Labels
+                st.subheader("📈 Interactive LDA Visualization with Custom Labels")
+                vis_data = gensimvis.prepare(lda_model, corpus, _id2word)
+
+                # Replace topic labels in pyLDAvis output
+                new_labels = [st.session_state["topic_names"].get(i, f"Topic {i+1}") for i in range(num_topics)]
+                vis_data.topic_coordinates['topic'] = new_labels
+                vis_data.topic_info['Category'] = vis_data.topic_info['Category'].apply(
+                    lambda x: x if x == 'Default' else st.session_state["topic_names"].get(int(x.split(" ")[1])-1, x)
+                )
+                st.components.v1.html(pyLDAvis.prepared_data_to_html(vis_data), width=1000, height=800, scrolling=True)
         else:
-            st.warning("Not enough unique tokens or documents for LDA after preprocessing.")
-
+            st.warning("Not enough data for LDA. Please check preprocessing results.")
 else:
-    st.info("☝️ Please upload a dataset (CSV, Excel, or TXT) to begin your analysis.")
+    st.info("☝️ Upload your data to begin.")
