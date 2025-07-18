@@ -230,19 +230,8 @@ if st.session_state["sentiment_df"] is not None:
             st.dataframe(st.session_state["sentiment_df"])
 
             st.subheader("📈 Interactive LDA Visualization")
-            
-            # === UPDATED PART: Override topic labels in pyLDAvis ===
-            vis_data = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
-            
-            # Replace default topic labels with your custom labels in the visualization
-            custom_labels = st.session_state["topic_labels"]
-            for topic_num, label in custom_labels.items():
-                vis_data.topic_info.loc[
-                    (vis_data.topic_info['Category'] == 'Topic') & 
-                    (vis_data.topic_info['Topic'] == topic_num + 1),
-                   'Topic'] = f"{label} ({topic_num + 1})"
-            
-            html_string = pyLDAvis.prepared_data_to_html(vis_data)
+            vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
+            html_string = pyLDAvis.prepared_data_to_html(vis)
             st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
 
 else:
