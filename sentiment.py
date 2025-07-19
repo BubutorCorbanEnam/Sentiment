@@ -212,7 +212,6 @@ if st.session_state["sentiment_df"] is not None:
             submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
 
         if submit_labels:
-            # --- Safe Topic Assignment ---
             topic_assignments = []
             for bow in corpus:
                 if not bow:
@@ -232,7 +231,6 @@ if st.session_state["sentiment_df"] is not None:
             st.success("Custom topics assigned successfully.")
 
             df_1 = st.session_state["sentiment_df"].copy()
-            st.dataframe(df_1)
 
             # --- Topic Analysis ---
             st.subheader("📊 Topic Analysis Based on Manual Labels")
@@ -240,38 +238,29 @@ if st.session_state["sentiment_df"] is not None:
             sns.barplot(x=df_1['Topic'].value_counts().index,
                         y=df_1['Topic'].value_counts().values,
                         palette=sns.color_palette('flare'))
-            plt.title('Topic Analysis')
-            plt.xlabel('Topic')
+            plt.title('Topic Analysis (Manual Labels)')
+            plt.xlabel('Manual Topic Labels')
             plt.ylabel('Counts')
             st.pyplot(plt.gcf())
             plt.clf()
 
             # --- Topic Polarity Distribution ---
-            st.subheader("📊 Topic Polarity Distribution")
+            st.subheader("📊 Topic Polarity Distribution (Manual Labels)")
             df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
-
-            polarity_map = {
-                "😠 Negative": "Negative",
-                "😐 Neutral": "Neutral",
-                "😊 Positive": "Positive"
-            }
+            polarity_map = {"😠 Negative": "Negative", "😐 Neutral": "Neutral", "😊 Positive": "Positive"}
             df_topic_polarity.rename(columns=polarity_map, inplace=True)
 
-            color_mapping = {
-                'Negative': 'red',
-                'Neutral': 'yellow',
-                'Positive': 'green'
-            }
+            colors = ['red' if col == 'Negative' else 'yellow' if col == 'Neutral' else 'green' for col in df_topic_polarity.columns]
 
-            ax = df_topic_polarity.plot(kind='bar', color=[color_mapping.get(col, 'gray') for col in df_topic_polarity.columns], stacked=True, figsize=(15, 10))
-            ax.set_xlabel('Topic')
+            ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(15, 10))
+            ax.set_xlabel('Manual Topic Labels')
             ax.set_ylabel('% Polarity')
-            ax.set_title('Topic Polarity Distribution')
+            ax.set_title('Topic Polarity Distribution (Manual Labels)')
             st.pyplot(ax.get_figure())
             plt.clf()
 
-            # --- Network Graph ---
-            st.subheader("🔗 Topic Relationship Graph (Manual Topic Names)")
+            # --- Topic Relationship Graph ---
+            st.subheader("🔗 Topic Relationship Graph (Manual Labels)")
             topic_names = list(df_1['Topic'].unique())
             df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
             df_topic_sentiment = df_topic_sentiment.loc[topic_names]
@@ -295,7 +284,7 @@ if st.session_state["sentiment_df"] is not None:
             st.pyplot(plt.gcf())
             plt.clf()
 
-            # --- Interactive LDA Visualization ---
+            # --- LDA Visualization ---
             st.subheader("📈 Interactive LDA Visualization")
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             html_string = pyLDAvis.prepared_data_to_html(vis)
