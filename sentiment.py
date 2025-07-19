@@ -293,227 +293,162 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
     st.header("🧠 LDA Topic Modeling (Manual Topic Assignment Supported)")
 
     # Prepare data for LDA: Filter out empty or whitespace-only cleaned comments
-    # This prevents issues with gensim.corpora.Dictionary and doc2bow for empty strings.
     initial_clean_comments = st.session_state["sentiment_df"]["Cleaned"].dropna()
     clean_comments_for_lda = [comment for comment in initial_clean_comments if comment.strip()]
 
     if not clean_comments_for_lda:
         st.warning("No valid cleaned text data available for Topic Modeling after initial filtering. Please ensure your data contains meaningful text.")
-    else: # Only proceed with LDA if there's valid data
-        # Process texts into tokens for Gensim LDA
+    else:
         processed_texts = [simple_preprocess(doc) for doc in clean_comments_for_lda]
-        
-        # Filter out any lists that became empty after simple_preprocess (e.g., if only stopwords or very short words were present)
         final_processed_texts = [text for text in processed_texts if text]
 
         if not final_processed_texts:
             st.warning("No valid processed text data for Topic Modeling after detailed preprocessing. This might happen if all comments consist only of stopwords or short words.")
-        else: # Only proceed with LDA if there's valid processed data
-            # Create Gensim dictionary and corpus from the final processed texts
+        else:
             id2word = corpora.Dictionary(final_processed_texts)
-            
-            # Filter out words that appear in too few (no_below) or too many (no_above) documents
-            # These parameters can be tuned to improve topic quality.
-            id2word.filter_extremes(no_below=5, no_above=0.5) # Example: min 5 documents, max 50% of documents
-            
+            id2word.filter_extremes(no_below=5, no_above=0.5)
             corpus = [id2word.doc2bow(text) for text in final_processed_texts]
 
-            # Update session state for LDA components (used for pyLDAvis and initial topic display)
             st.session_state["id2word"] = id2word
             st.session_state["corpus"] = corpus
 
-            # Slider to select the number of topics for LDA
             num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"], key="num_topics_slider")
             
-            # --- MODIFICATION START ---
             # Reset topic_labels if the number of topics changes to prevent old labels from previous runs
             # from lingering and causing visual inconsistencies in topic count.
             if num_topics != st.session_state["num_topics"]:
                 st.session_state["topic_labels"] = {i: f"Topic {i+1}" for i in range(num_topics)}
                 st.session_state["lda_model"] = None # Invalidate existing model to force retraining
-            st.session_state["num_topics"] = num_topics # Update session state with the selected number
-            # --- MODIFICATION END ---
+            st.session_state["num_topics"] = num_topics
 
-
-            # Button to run LDA model training
             if st.button("🚀 Run LDA Model Training"):
                 if not corpus:
                     st.error("Cannot run LDA: The corpus is empty. This usually means no meaningful text was found after preprocessing or filtering.")
                 else:
-                    # The training function is cached, so it runs only if parameters change or first time
+                    # Train the model with the user's selected num_topics only
                     lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
                     st.session_state["lda_model"] = lda_model
                     st.success("LDA model training complete!")
 
                     st.subheader("🔑 Top Words per Topic (from LDA Model)")
-                    # Display top words for each topic
-                    # Ensure we iterate over the *actual* number of topics from the trained model
+                    # Display top words for each topic, ensuring it's based on num_topics
+                    # Gensim's .show_topics() will always return `num_topics` topics,
+                    # using its internal IDs. We need to respect those IDs for consistent labeling.
+                    # First, update topic_labels with the actual IDs from the newly trained model
+                    st.session_state["topic_labels"] = {} # Clear old labels
+                    actual_topic_ids_from_model_training = []
                     for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=30, formatted=False):
-                        words = ", ".join([w for w, p in topic])
-                        # --- MODIFICATION START ---
-                        # Use the actual topic index from lda_model.show_topics to ensure correct mapping
-                        # and update the session state labels if they don't exist for this specific idx.
-                        # This handles cases where Gensim's internal IDs might not be 0-indexed or sequential,
-                        # but still ensures 'num_topics' are displayed.
-                        display_idx = idx # Use Gensim's provided index
-                        if display_idx not in st.session_state["topic_labels"]:
-                             st.session_state["topic_labels"][display_idx] = f"Topic {display_idx+1}"
-                        
-                        # Use the user-assigned label if available, otherwise fallback to default
-                        current_display_label = st.session_state["topic_labels"].get(display_idx, f"Topic {display_idx+1}")
-                        st.write(f"**{current_display_label}:** {words}")
-                        # --- MODIFICATION END ---
+                        actual_topic_ids_from_model_training.append(idx)
+                        st.session_state["topic_labels"][idx] = f"Topic {idx+1}" # Initialize with default label using Gensim's internal ID
                     
-                    # --- MODIFIED SECTION FOR pprint DISPLAY ---
+                    # Now display using the actual IDs
+                    for idx in actual_topic_ids_from_model_training:
+                        words = ", ".join([w for w, p in lda_model.show_topic(idx, topn=30)]) # Use show_topic for a specific index
+                        current_display_label = st.session_state["topic_labels"].get(idx, f"Topic {idx+1}")
+                        st.write(f"**{current_display_label} (Internal ID: {idx+1}):** {words}") # Show internal ID for clarity
+                    
                     st.subheader("Raw LDA Topics for Expert Review")
-                    
-                    # Capture the output of pprint to a string
                     f = io.StringIO()
                     with redirect_stdout(f):
-                        pprint(lda_model.print_topics(num_topics=num_topics, num_words=30)) # Ensure num_topics and num_words match
+                        pprint(lda_model.print_topics(num_topics=num_topics, num_words=30))
                     s = f.getvalue()
-                    
-                    st.code(s) # Display the captured string using st.code
-                    # --- END OF MODIFIED SECTION ---
+                    st.code(s)
 
-            # Section for assigning custom labels and performing further analysis, only if LDA model is trained
-            # This 'if st.session_state["lda_model"]' block ensures all subsequent logic runs only after training.
             if st.session_state["lda_model"]:
                 st.markdown("---")
                 st.subheader("📝 Assign Custom Labels to Topics")
 
-                # Form for manual topic labeling inputs
                 with st.form("topic_label_form"):
-                    # Iterate only up to the currently selected num_topics for labeling inputs
-                    # --- MODIFICATION START ---
-                    # Ensure the loop for assigning labels uses the current num_topics.
-                    # We will loop `num_topics` times, using 0 to num_topics-1 as logical topic indices.
-                    # We also need to map these logical indices to Gensim's *actual* internal topic IDs
-                    # that were output by `lda_model.show_topics`.
+                    # Get the actual topic IDs from the currently trained model for consistent labeling
+                    # This ensures the input fields match the topics generated by the model.
+                    current_model_topic_ids = [topic[0] for topic in st.session_state["lda_model"].show_topics(num_topics=st.session_state["num_topics"], formatted=False)]
                     
-                    # Get the actual topic IDs from the trained model to ensure labels align correctly
-                    # If the model just trained, lda_model.show_topics will give us these.
-                    # We store them temporarily to iterate over.
-                    actual_topic_ids = [topic[0] for topic in st.session_state["lda_model"].show_topics(num_topics=num_topics, formatted=False)]
-                    
-                    # Ensure topic_labels has entries for all current topics (0 to num_topics-1)
-                    # and remove any labels for topics that are no longer present.
+                    # Update topic_labels to ensure only labels for current topics are kept
                     st.session_state["topic_labels"] = {
-                        k: v for k, v in st.session_state["topic_labels"].items() if k in actual_topic_ids
+                        k: v for k, v in st.session_state["topic_labels"].items() if k in current_model_topic_ids
                     }
-                    for i in actual_topic_ids:
+                    
+                    # Ensure all current topics have a default label
+                    for i in current_model_topic_ids:
                         if i not in st.session_state["topic_labels"]:
                             st.session_state["topic_labels"][i] = f"Topic {i+1}"
 
-                    for i, topic_id_from_model in enumerate(actual_topic_ids):
-                        # Retrieve current label for the *actual Gensim topic ID*
+                    # Display text input fields for each topic based on the actual topic IDs
+                    for i, topic_id_from_model in enumerate(current_model_topic_ids):
                         current_label = st.session_state["topic_labels"].get(topic_id_from_model, f"Topic {topic_id_from_model+1}")
-                        
-                        # Present the topic for labeling using its sequential number for user friendliness (e.g., Topic 1, Topic 2...)
-                        # but store the label against its *actual Gensim topic ID* in session_state.
-                        new_label = st.text_input(f"Label for Topic {i+1} (Internal ID: {topic_id_from_model+1})", # Show internal ID for debugging/clarity
-                                                 value=current_label, key=f"topic_input_{topic_id_from_model}") # Use actual_topic_id for unique key
-                        st.session_state["topic_labels"][topic_id_from_model] = new_label # Update label in session state
-
-                    # --- MODIFICATION END ---
+                        new_label = st.text_input(f"Label for Topic {i+1} (Internal ID: {topic_id_from_model+1})",
+                                                 value=current_label, key=f"topic_input_{topic_id_from_model}")
+                        st.session_state["topic_labels"][topic_id_from_model] = new_label
                     
                     submit_labels = st.form_submit_button("✔️ Apply Topic Labels and Analyze")
 
                 if submit_labels:
-                    # Create a copy of the sentiment DataFrame for adding topic assignments
                     df_with_topics = st.session_state["sentiment_df"].copy()
-                    
-                    # Initialize a list to store assigned topic labels for each original comment
-                    # This list will be the same length as the original sentiment_df, ensuring alignment.
                     full_topic_assignments = ["Unassigned"] * len(df_with_topics)
 
-                    # Iterate through each row of the original DataFrame to assign topics
                     for idx, row in df_with_topics.iterrows():
                         cleaned_text_doc = row["Cleaned"]
                         
-                        # Handle cases where cleaned text is empty or NaN after preprocessing
                         if pd.isna(cleaned_text_doc) or not cleaned_text_doc.strip():
                             full_topic_assignments[idx] = "Unassigned"
-                            continue # Skip to the next document
+                            continue
 
-                        # Convert cleaned text to tokens using simple_preprocess
                         doc_tokens = simple_preprocess(cleaned_text_doc)
                         
                         if not doc_tokens:
                             full_topic_assignments[idx] = "Unassigned"
-                            continue # Skip if no tokens are left after simple_preprocess
+                            continue
 
-                        # Convert tokens to Bag-of-Words using the model's dictionary (id2word)
-                        # This step is critical for aligning document words to the model's vocabulary.
                         bow_for_this_doc = st.session_state["id2word"].doc2bow(doc_tokens)
                         
                         if not bow_for_this_doc:
                             full_topic_assignments[idx] = "Unassigned"
-                            continue # Skip if BOW is empty (e.g., all words filtered out by id2word.filter_extremes)
+                            continue
 
-                        # Get topic probabilities for the current document from the trained LDA model
                         try:
                             topic_probs = st.session_state["lda_model"].get_document_topics(bow_for_this_doc)
                         except IndexError:
-                            # Catch potential IndexError if a BOW somehow still contains out-of-vocabulary IDs
-                            # This is a safeguard, as previous filters should prevent most cases.
                             st.warning(f"Could not assign topic to document at index {idx} due to vocabulary mismatch. Assigning 'Unassigned'.")
                             full_topic_assignments[idx] = "Unassigned"
                             continue
 
-
                         if topic_probs:
-                            # Find the topic with the highest probability
                             assigned_topic_id = max(topic_probs, key=lambda x: x[1])[0]
-                            # Get the custom label for this topic, or use a default if not set
-                            # --- MODIFICATION START ---
-                            # Ensure we use the actual topic_id from Gensim for lookup in topic_labels
+                            # Use the actual topic_id from Gensim for lookup in topic_labels
                             label = st.session_state["topic_labels"].get(assigned_topic_id, f"Topic {assigned_topic_id+1}")
-                            # --- MODIFICATION END ---
                             full_topic_assignments[idx] = label
                         else:
-                            full_topic_assignments[idx] = "Unassigned" # Assign 'Unassigned' if no topic probabilities are found
+                            full_topic_assignments[idx] = "Unassigned"
 
-                    # Add the 'Topic' column to the DataFrame
                     df_with_topics["Topic"] = full_topic_assignments
 
-                    # Filter out 'Unassigned' topics for visualization purposes, as they don't contribute to topic-specific insights
-                    # --- MODIFICATION START ---
-                    # Only include topics that were assigned a label (i.e., not 'Unassigned') and are part of the current num_topics.
-                    # The topic labels dictionary already ensures only labels for the current num_topics are kept.
+                    # Filter out 'Unassigned' topics and ensure only topics from the *current* model are considered
                     df_for_viz = df_with_topics[
                         (df_with_topics["Topic"] != "Unassigned") & 
                         (df_with_topics["Topic"].isin(st.session_state["topic_labels"].values()))
                     ].copy()
-                    # --- MODIFICATION END ---
 
                     if not df_for_viz.empty:
-                        # --- Topic Analysis Count Plot ---
                         st.subheader("📊 Topic Analysis: Document Counts per Topic")
                         plt.figure(figsize=(12, 7))
-                        # Use value_counts().index to ensure bars are ordered by frequency
                         sns.countplot(data=df_for_viz, x="Topic", palette="viridis", order=df_for_viz['Topic'].value_counts().index)
                         plt.title('Distribution of Documents Across Topics')
                         plt.xlabel('Topic Labels')
                         plt.ylabel('Number of Documents')
-                        plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
-                        plt.tight_layout() # Adjust layout to prevent labels from overlapping
-                        st.pyplot(plt.gcf()) # Display the plot in Streamlit
-                        plt.close() # Close the figure to free memory
+                        plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        st.pyplot(plt.gcf())
+                        plt.close()
 
-                        # --- Topic Polarity Distribution Stacked Bar Chart ---
                         st.subheader("📊 Topic Polarity Distribution")
-                        # Group by Topic and Sentiment, then unstack and normalize to percentages
                         df_topic_polarity = df_for_viz.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
                         
-                        # Ensure all three sentiment columns exist and are in a consistent order for plotting
                         sentiment_order = ["😠 Negative", "😐 Neutral", "😊 Positive"]
                         for s_type in sentiment_order:
                             if s_type not in df_topic_polarity.columns:
                                 df_topic_polarity[s_type] = 0.0
-                        df_topic_polarity = df_topic_polarity[sentiment_order] * 100 # Convert to percentage for display
+                        df_topic_polarity = df_topic_polarity[sentiment_order] * 100
 
-                        # Define color mapping for sentiments
                         color_mapping = {"😠 Negative": 'red', "😐 Neutral": 'orange', "😊 Positive": 'green'}
                         colors = [color_mapping[col] for col in df_topic_polarity.columns]
 
@@ -522,16 +457,15 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                         ax.set_ylabel('Percentage of Polarity (%)')
                         ax.set_title('Topic Polarity Distribution')
                         ax.set_xticklabels(df_topic_polarity.index, rotation=45, ha='right')
-                        ax.legend(title='Polarity', bbox_to_anchor=(1.05, 1), loc='upper left') # Move legend outside to prevent overlap
+                        ax.legend(title='Polarity', bbox_to_anchor=(1.05, 1), loc='upper left')
                         plt.tight_layout()
-                        st.pyplot(ax.get_figure()) # Display the plot
-                        plt.close() # Close the figure
+                        st.pyplot(ax.get_figure())
+                        plt.close()
 
-# --- Topic Relationship Graph (Based on Sentiment Similarity using Euclidean Distance transformed to Similarity) ---
                         st.subheader("🔗 Topic Relationship Graph (Based on Sentiment Profiles)")
                         st.info("This graph visualizes the relationships between topics. The thickness of a connection indicates the strength of the similarity in their sentiment profiles.")
 
-                        df_sim_ready = df_topic_polarity.fillna(0) # Ensure no NaNs before similarity calculation
+                        df_sim_ready = df_topic_polarity.fillna(0)
                         
                         if df_sim_ready.empty:
                             st.warning("Cannot generate topic relationship graph: No data for sentiment similarity calculation after filtering.")
@@ -540,77 +474,61 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                         else:
                             topic_names = df_sim_ready.index.tolist()
                             
-                            # Calculate similarities using Euclidean distance and convert to a similarity score
-                            # A smaller Euclidean distance means higher similarity.
-                            # We convert distance to similarity using 1 / (1 + distance) to get values between 0 and 1.
                             topic_polarity_matrix = np.zeros((len(topic_names), len(topic_names)))
                             
                             for i in range(len(topic_names)):
-                                for j in range(i + 1, len(topic_names)): # Iterate over unique pairs (i < j)
-                                    # Ensure both profiles are 1D arrays for euclidean distance
+                                for j in range(i + 1, len(topic_names)):
                                     profile_i = df_sim_ready.iloc[i].values.flatten()
                                     profile_j = df_sim_ready.iloc[j].values.flatten()
 
                                     dist = euclidean(profile_i, profile_j)
-                                    similarity = 1 / (1 + dist) # Transform distance to similarity (0 to 1)
+                                    similarity = 1 / (1 + dist)
                                     topic_polarity_matrix[i][j] = similarity
-                                    topic_polarity_matrix[j][i] = similarity # Make matrix symmetric
+                                    topic_polarity_matrix[j][i] = similarity
 
-                            # --- REWRITTEN NETWORKX GRAPH CODE ---
                             G = nx.Graph()
                             G.add_nodes_from(topic_names)
 
-                            # Add edges for ALL unique pairs, regardless of a hard threshold
                             for i in range(len(topic_polarity_matrix)):
-                                for j in range(i + 1, len(topic_polarity_matrix[0])): # Ensure i < j
-                                    # ALWAYS add the edge, storing its calculated similarity as 'weight'
+                                for j in range(i + 1, len(topic_polarity_matrix[0])):
                                     G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
                             
-                            # Set the layout of the nodes
                             pos = nx.spring_layout(G)
-                            plt.figure(figsize=(12, 8)) # Set figure size for better visualization
+                            plt.figure(figsize=(12, 8))
 
-                            # Prepare dynamic edge widths based on their weights (similarity scores)
                             edge_weights = [d['weight'] for u, v, d in G.edges(data=True)]
                             
-                            # Normalize weights to a desired visual range for line thickness (e.g., from 0.5 to 5.0)
                             min_line_width = 0.5
                             max_line_width = 5.0
 
-                            if edge_weights: # Only proceed if there are edges
-                                # Handle case where all weights might be identical (avoid division by zero)
+                            if edge_weights:
                                 if max(edge_weights) == min(edge_weights):
-                                    # If all weights are the same, assign a default width
                                     widths = [min_line_width] * len(edge_weights)
                                 else:
-                                    # Normalize weights to the desired min_line_width to max_line_width range
                                     widths = [min_line_width + (w - min(edge_weights)) / (max(edge_weights) - min(edge_weights)) * (max_line_width - min_line_width) for w in edge_weights]
-                            else: # Fallback if for some reason no edges were added (shouldn't happen with the logic above unless <2 topics)
+                            else:
                                 widths = []
 
-                            # Draw the graph
                             nx.draw(G, pos, with_labels=True, font_weight='bold',
                                     node_color='skyblue', node_size=2000, edge_color='gray',
                                     width=widths, alpha=0.8, font_size=10) 
 
-                            # Set the edge labels (similarity scores)
                             edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
                             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=9, label_pos=0.3) 
 
                             plt.title('Topic Similarity Graph (Based on Sentiment Profiles)')
-                            plt.axis('off') # Hide axes for a cleaner look
+                            plt.axis('off')
                             plt.tight_layout()
-                            st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
-                            plt.close() # Close the plot to free memory
-                            # --- END OF REWRITTEN NETWORKX GRAPH CODE ---              
-                        # --- Interactive LDA Visualization (pyLDAvis) ---
+                            st.pyplot(plt.gcf())
+                            plt.close()
+                                    
                         st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
                         st.info("This interactive visualization helps explore topics by showing their relationships and the most relevant terms. Move the mouse over topics and words for details.")
                         
-                        # Check if LDA model and its components are available before preparing visualization
                         if st.session_state["lda_model"] and st.session_state["corpus"] and st.session_state["id2word"]:
                             try:
-                                # pyLDAvis preparation: mds='mmds' or 'tsne' are common options for dimensionality reduction
+                                # pyLDAvis preparation will use the already trained lda_model,
+                                # which was trained with the user-selected num_topics.
                                 vis = gensimvis.prepare(st.session_state["lda_model"], st.session_state["corpus"], st.session_state["id2word"], mds='mmds')
                                 html_string = pyLDAvis.prepared_data_to_html(vis)
                                 st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
