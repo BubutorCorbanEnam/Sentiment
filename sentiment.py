@@ -317,10 +317,17 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
             
             # --- MODIFICATION START (Ensuring consistency with num_topics) ---
             # Reset topic_labels and invalidate model if the number of topics changes
+            # This is crucial for dynamic behavior.
             if num_topics != st.session_state["num_topics"]:
                 st.session_state["topic_labels"] = {} # Clear old labels
                 st.session_state["lda_model"] = None # Invalidate existing model to force retraining
             st.session_state["num_topics"] = num_topics # Update session state with the selected number
+
+            # Add an info message to guide the user to retrain the model
+            if st.session_state["lda_model"] is None:
+                st.info("Please click '🚀 Run LDA Model Training' to apply the selected number of topics.")
+            elif st.session_state["lda_model"].num_topics != st.session_state["num_topics"]:
+                st.info(f"The current model was trained with {st.session_state['lda_model'].num_topics} topics. Click '🚀 Run LDA Model Training' to retrain with {st.session_state['num_topics']} topics.")
             # --- MODIFICATION END ---
 
 
@@ -336,6 +343,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     st.subheader("🔑 Top Words per Topic (from LDA Model)")
                     # Display top words for each topic, ensuring it's based on num_topics
                     # Get the actual topic IDs from the newly trained model (which respects num_topics)
+                    # This list will contain exactly 'num_topics' elements.
                     actual_topic_ids_from_model_training = [topic[0] for topic in lda_model.show_topics(num_topics=st.session_state["num_topics"], formatted=False)]
                     
                     # Initialize/update topic_labels with default labels for the *actual* topic IDs from the model
@@ -345,7 +353,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                             st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
                     
                     # Now display using the actual IDs and their (potentially customized) labels
-                    for idx in actual_topic_ids_from_model_training:
+                    for i, idx in enumerate(actual_topic_ids_from_model_training): # Use enumerate to get a sequential display number
                         words = ", ".join([w for w, p in lda_model.show_topic(idx, topn=30)]) # Use show_topic for a specific index
                         current_display_label = st.session_state["topic_labels"].get(idx, f"Topic {idx+1}")
                         st.write(f"**{current_display_label} (Internal ID: {idx+1}):** {words}") # Show internal ID for clarity
