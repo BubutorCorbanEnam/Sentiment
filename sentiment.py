@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from scipy.spatial.distance import euclidean
 import seaborn as sns
+from pprint import pprint # Added for pretty printing LDA topics
+
 
 # --- Setup ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
