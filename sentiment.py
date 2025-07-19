@@ -88,8 +88,6 @@ def train_gensim_lda_model(_corpus, _id2word, _num_topics):
         id2word=_id2word,
         num_topics=_num_topics,
         random_state=50,
-        passes=5,
-        iterations=50,
         per_word_topics=True
     )
     return lda_model
@@ -106,7 +104,7 @@ if "corpus" not in st.session_state:
 if "id2word" not in st.session_state:
     st.session_state["id2word"] = None
 if "num_topics" not in st.session_state:
-    st.session_state["num_topics"] = 5
+    st.session_state["num_topics"] = _num_topics
 
 # --- Upload ---
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
