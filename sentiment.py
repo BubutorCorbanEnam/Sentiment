@@ -360,9 +360,9 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 st.pyplot(ax.get_figure()) # Display the plot
                 plt.close() # Close the figure
 
-                # --- Topic Relationship Graph (using Euclidean Distance for similarity) ---
+                # --- Topic Relationship Graph (Based on Sentiment Similarity using Cosine Similarity) ---
                 st.subheader("🔗 Topic Relationship Graph (Based on Sentiment Similarity)")
-                st.info("This graph visualizes the relationships between topics. A thicker connection indicates greater similarity in their sentiment profiles. Similarity is calculated using Euclidean distance.")
+                st.info("This graph visualizes the relationships between topics. A thicker connection indicates greater similarity in their sentiment profiles, calculated using Cosine Similarity.")
 
                 df_sim_ready = df_topic_polarity.fillna(0) # Fill any potential NaNs with 0 before similarity calculation
                 
@@ -371,36 +371,22 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 else:
                     topic_names = df_sim_ready.index.tolist()
                     
+                    # Compute cosine similarity between rows (topics)
+                    # This `topic_polarity_matrix` now holds the cosine similarity scores
+                    topic_polarity_matrix = cosine_similarity(df_sim_ready.values)
+                    np.fill_diagonal(topic_polarity_matrix, 0) # A topic is perfectly similar to itself, set to 0
+
                     G = nx.Graph() # Initialize an empty undirected graph
                     G.add_nodes_from(topic_names) # Add topics as nodes
 
-                    # Calculate similarities using Euclidean distance and convert to a similarity score
-                    # A smaller Euclidean distance means higher similarity.
-                    # We can transform distance to similarity using 1 / (1 + distance)
-                    topic_similarity_matrix = np.zeros((len(topic_names), len(topic_names)))
+                    similarity_threshold = 0.5 # Define a threshold for adding edges (connections)
+                                               # This threshold applies to cosine similarity (0 to 1)
                     
-                    for i in range(len(topic_names)):
-                        for j in range(i + 1, len(topic_names)): # Iterate over unique pairs
-                            # Ensure both profiles are 1D arrays for euclidean distance
-                            profile_i = df_sim_ready.iloc[i].values.flatten()
-                            profile_j = df_sim_ready.iloc[j].values.flatten()
-
-                            dist = euclidean(profile_i, profile_j)
-                            # Convert distance to similarity score: higher score for lower distance
-                            # Adding 1 to the denominator prevents division by zero and scales it between 0 and 1.
-                            similarity = 1 / (1 + dist) 
-                            topic_similarity_matrix[i][j] = similarity
-                            topic_similarity_matrix[j][i] = similarity # Symmetric matrix
-
-                    # Define a threshold for adding edges (connections)
-                    # This threshold now applies to the transformed similarity score (0 to 1)
-                    similarity_threshold = 0.6 # Adjust this threshold (between 0 and 1)
-
                     # Add edges based on the similarity threshold
-                    for i in range(len(topic_names)):
-                        for j in range(i + 1, len(topic_names)): # Iterate over unique pairs
-                            if topic_similarity_matrix[i][j] > similarity_threshold:
-                                G.add_edge(topic_names[i], topic_names[j], weight=topic_similarity_matrix[i][j])
+                    for i in range(len(topic_polarity_matrix)):
+                        for j in range(i + 1, len(topic_polarity_matrix)): # Iterate over unique pairs to avoid duplicate edges
+                            if topic_polarity_matrix[i][j] > similarity_threshold:
+                                G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
 
                     if G.edges: # Only draw the graph if there are connections to visualize
                         # Use spring_layout for node positioning
