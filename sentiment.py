@@ -69,6 +69,18 @@ def analyze_sentiment(text):
     opinion = "Opinion" if subjectivity > 0 else "Fact"
     return polarity, subjectivity, sentiment, opinion
 
+def generate_wordcloud(text):
+    wc = WordCloud(width=800, height=400, background_color="white", stopwords=stop_words)
+    return wc.generate(text)
+
+def prepare_gensim_data(texts):
+    custom_stopwords = stop_words.union({'from', 'subject', 're', 'edu', 'use'})
+    processed_texts = [
+        [word for word in simple_preprocess(str(doc), deacc=True) if word not in custom_stopwords]
+        for doc in texts
+    ]
+    return processed_texts
+
 @st.cache_resource(show_spinner=False)
 def train_gensim_lda_model(_corpus, _id2word, _num_topics):
     lda_model = gensim.models.LdaModel(
@@ -100,41 +112,67 @@ if "num_topics" not in st.session_state:
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
-    try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(uploaded_file)
-        elif uploaded_file.name.endswith(".txt"):
-            df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
-        else:
-            st.error("Unsupported file format.")
-            st.stop()
+    if st.session_state["sentiment_df"] is None:
+        try:
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            elif uploaded_file.name.endswith((".xlsx", ".xls")):
+                df = pd.read_excel(uploaded_file)
+            elif uploaded_file.name.endswith(".txt"):
+                df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
+            else:
+                st.error("Unsupported file format.")
+                st.stop()
 
-        text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select Text Column", text_cols)
+            text_cols = df.select_dtypes(include="object").columns.tolist()
+            selected_col = st.selectbox("Select Text Column", text_cols)
 
-        if st.button("🔍 Run Sentiment Analysis"):
-            results = []
-            for comment in df[selected_col].dropna():
-                cleaned = clean_text(comment)
-                polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
-                results.append({
-                    "Original": comment,
-                    "Cleaned": cleaned,
-                    "Polarity": polarity,
-                    "Subjectivity": subjectivity,
-                    "Sentiment": sentiment,
-                    "Type": opinion
-                })
-            sentiment_df = pd.DataFrame(results)
-            st.session_state["sentiment_df"] = sentiment_df
+            if st.button("🔍 Run Sentiment Analysis & WordCloud"):
+                results = []
+                for comment in df[selected_col].dropna():
+                    cleaned = clean_text(comment)
+                    polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
+                    results.append({
+                        "Original": comment,
+                        "Cleaned": cleaned,
+                        "Polarity": polarity,
+                        "Subjectivity": subjectivity,
+                        "Sentiment": sentiment,
+                        "Type": opinion
+                    })
+                sentiment_df = pd.DataFrame(results)
+                st.session_state["sentiment_df"] = sentiment_df
 
-            st.subheader("🗂️ Sentiment Analysis Results")
-            st.dataframe(sentiment_df)
+                st.subheader("🗂️ Sentiment Analysis Results")
+                st.dataframe(sentiment_df)
 
-    except Exception as e:
-        st.error(f"Error: {e}")
+                st.download_button("📥 Download CSV", sentiment_df.to_csv(index=False), "sentiment_results.csv")
+
+                st.subheader("☁️ Word Cloud")
+                all_text = " ".join(sentiment_df["Cleaned"].tolist())
+                wc_image = generate_wordcloud(all_text)
+                st.image(wc_image.to_array())
+
+                st.subheader("📊 Sentiment Distribution")
+                counts = sentiment_df['Sentiment'].value_counts().reset_index()
+                counts.columns = ["Sentiment", "Count"]
+                chart = alt.Chart(counts).mark_bar().encode(
+                    x=alt.X('Sentiment', sort="-y"),
+                    y='Count',
+                    color='Sentiment',
+                    tooltip=['Sentiment', 'Count']
+                )
+                st.altair_chart(chart)
+
+                st.subheader("🎯 Scatter Plot")
+                scatter = alt.Chart(sentiment_df).mark_circle(size=80).encode(
+                    x='Polarity', y='Subjectivity', color='Sentiment',
+                    tooltip=['Original', 'Polarity', 'Subjectivity']
+                ).interactive()
+                st.altair_chart(scatter)
+
+        except Exception as e:
+            st.error(f"Error: {e}")
 
 # --- LDA Topic Modeling ---
 if st.session_state["sentiment_df"] is not None:
@@ -142,7 +180,7 @@ if st.session_state["sentiment_df"] is not None:
     st.header("🧠 LDA Topic Modeling (Manual Topic Assignment Supported)")
 
     clean_comments = st.session_state["sentiment_df"]["Cleaned"].dropna().tolist()
-    processed_texts = [simple_preprocess(doc) for doc in clean_comments]
+    processed_texts = prepare_gensim_data(clean_comments)
     id2word = corpora.Dictionary(processed_texts)
     corpus = [id2word.doc2bow(text) for text in processed_texts]
 
@@ -161,6 +199,7 @@ if st.session_state["sentiment_df"] is not None:
             words = ", ".join([w for w, p in topic])
             st.write(f"**Topic {idx+1}:** {words}")
 
+    # --- Manual Topic Assignment ---
     if st.session_state["lda_model"]:
         st.markdown("---")
         st.subheader("📝 Assign Custom Labels to Topics")
@@ -173,9 +212,12 @@ if st.session_state["sentiment_df"] is not None:
             submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
 
         if submit_labels:
-            df_1 = st.session_state["sentiment_df"].copy()
+            # --- Safe Topic Assignment ---
             topic_assignments = []
             for bow in corpus:
+                if not bow:
+                    topic_assignments.append("Unassigned")
+                    continue
                 topic_probs = st.session_state["lda_model"].get_document_topics(bow)
                 if topic_probs:
                     assigned_topic = max(topic_probs, key=lambda x: x[1])[0]
@@ -184,40 +226,56 @@ if st.session_state["sentiment_df"] is not None:
                 else:
                     topic_assignments.append("Unassigned")
 
-            df_1["Topic"] = topic_assignments
+            non_empty_mask = st.session_state["sentiment_df"]["Cleaned"].notnull()
+            st.session_state["sentiment_df"].loc[non_empty_mask, "Topic"] = topic_assignments
 
+            st.success("Custom topics assigned successfully.")
+
+            df_1 = st.session_state["sentiment_df"].copy()
+            st.dataframe(df_1)
+
+            # --- Topic Analysis ---
             st.subheader("📊 Topic Analysis Based on Manual Labels")
             plt.figure(figsize=(15,10))
-            sns.countplot(data=df_1, x="Topic", palette="flare")
+            sns.barplot(x=df_1['Topic'].value_counts().index,
+                        y=df_1['Topic'].value_counts().values,
+                        palette=sns.color_palette('flare'))
+            plt.title('Topic Analysis')
+            plt.xlabel('Topic')
+            plt.ylabel('Counts')
             st.pyplot(plt.gcf())
             plt.clf()
 
+            # --- Topic Polarity Distribution ---
             st.subheader("📊 Topic Polarity Distribution")
             df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
-            polarity_map = {"😠 Negative": "Negative", "😐 Neutral": "Neutral", "😊 Positive": "Positive"}
+
+            polarity_map = {
+                "😠 Negative": "Negative",
+                "😐 Neutral": "Neutral",
+                "😊 Positive": "Positive"
+            }
             df_topic_polarity.rename(columns=polarity_map, inplace=True)
 
-            color_mapping = {'Negative': 'red', 'Neutral': 'yellow', 'Positive': 'green'}
-            colors = [color_mapping.get(col, 'gray') for col in df_topic_polarity.columns]
+            color_mapping = {
+                'Negative': 'red',
+                'Neutral': 'yellow',
+                'Positive': 'green'
+            }
 
-            ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(15, 10))
+            ax = df_topic_polarity.plot(kind='bar', color=[color_mapping.get(col, 'gray') for col in df_topic_polarity.columns], stacked=True, figsize=(15, 10))
             ax.set_xlabel('Topic')
             ax.set_ylabel('% Polarity')
             ax.set_title('Topic Polarity Distribution')
-            ax.set_xticklabels(df_topic_polarity.index, rotation=90)
-            ax.legend(title='Polarity')
-
             st.pyplot(ax.get_figure())
             plt.clf()
 
+            # --- Network Graph ---
             st.subheader("🔗 Topic Relationship Graph (Manual Topic Names)")
-            df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack().fillna(0)
-            for col in ["😠 Negative", "😐 Neutral", "😊 Positive"]:
-                if col not in df_topic_sentiment.columns:
-                    df_topic_sentiment[col] = 0
-            df_topic_sentiment = df_topic_sentiment[["😠 Negative", "😐 Neutral", "😊 Positive"]]
+            topic_names = list(df_1['Topic'].unique())
+            df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
+            df_topic_sentiment = df_topic_sentiment.loc[topic_names]
 
-            topic_names = df_topic_sentiment.index.tolist()
             topic_polarity_matrix = cosine_similarity(df_topic_sentiment.values)
             np.fill_diagonal(topic_polarity_matrix, 0)
 
@@ -229,18 +287,19 @@ if st.session_state["sentiment_df"] is not None:
                     if topic_polarity_matrix[i][j] > 0.5:
                         G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
 
-            pos = nx.spring_layout(G)
-            plt.figure(figsize=(12,8))
+            pos = nx.spring_layout(G, seed=42)
+            plt.figure(figsize=(12, 8))
             nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
             edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
             nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-
             st.pyplot(plt.gcf())
             plt.clf()
 
+            # --- Interactive LDA Visualization ---
             st.subheader("📈 Interactive LDA Visualization")
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             html_string = pyLDAvis.prepared_data_to_html(vis)
             st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+
 else:
     st.info("Upload data and run sentiment analysis first to enable topic modeling.")
