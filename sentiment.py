@@ -388,8 +388,8 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                             topic_polarity_matrix[i][j] = similarity
                             topic_polarity_matrix[j][i] = similarity # Make matrix symmetric
 
-# --- START OF YOUR REQUESTED GRAPH CODE SNIPPET (Modified slightly for Streamlit display) ---
-                    # Create a graph
+                # --- START OF YOUR REQUESTED GRAPH CODE SNIPPET (Modified slightly for Streamlit display) ---
+                 # Create a graph
                     G = nx.Graph()
 
                     # Add nodes to the graph
