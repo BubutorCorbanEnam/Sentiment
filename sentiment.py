@@ -312,36 +312,39 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
             st.session_state["id2word"] = id2word
             st.session_state["corpus"] = corpus
 
+            # Get the number of topics from the slider
             num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"], key="num_topics_slider")
             
-            # Reset topic_labels if the number of topics changes to prevent old labels from previous runs
-            # from lingering and causing visual inconsistencies in topic count.
+            # --- MODIFICATION START (Ensuring consistency with num_topics) ---
+            # Reset topic_labels and invalidate model if the number of topics changes
             if num_topics != st.session_state["num_topics"]:
-                st.session_state["topic_labels"] = {i: f"Topic {i+1}" for i in range(num_topics)}
+                st.session_state["topic_labels"] = {} # Clear old labels
                 st.session_state["lda_model"] = None # Invalidate existing model to force retraining
-            st.session_state["num_topics"] = num_topics
+            st.session_state["num_topics"] = num_topics # Update session state with the selected number
+            # --- MODIFICATION END ---
+
 
             if st.button("🚀 Run LDA Model Training"):
                 if not corpus:
                     st.error("Cannot run LDA: The corpus is empty. This usually means no meaningful text was found after preprocessing or filtering.")
                 else:
-                    # Train the model with the user's selected num_topics only
-                    lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                    # Train the model with the user's selected num_topics ONLY
+                    lda_model = train_gensim_lda_model(corpus, id2word, st.session_state["num_topics"])
                     st.session_state["lda_model"] = lda_model
                     st.success("LDA model training complete!")
 
                     st.subheader("🔑 Top Words per Topic (from LDA Model)")
                     # Display top words for each topic, ensuring it's based on num_topics
-                    # Gensim's .show_topics() will always return `num_topics` topics,
-                    # using its internal IDs. We need to respect those IDs for consistent labeling.
-                    # First, update topic_labels with the actual IDs from the newly trained model
-                    st.session_state["topic_labels"] = {} # Clear old labels
-                    actual_topic_ids_from_model_training = []
-                    for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=30, formatted=False):
-                        actual_topic_ids_from_model_training.append(idx)
-                        st.session_state["topic_labels"][idx] = f"Topic {idx+1}" # Initialize with default label using Gensim's internal ID
+                    # Get the actual topic IDs from the newly trained model (which respects num_topics)
+                    actual_topic_ids_from_model_training = [topic[0] for topic in lda_model.show_topics(num_topics=st.session_state["num_topics"], formatted=False)]
                     
-                    # Now display using the actual IDs
+                    # Initialize/update topic_labels with default labels for the *actual* topic IDs from the model
+                    # This ensures that even if Gensim gives non-sequential IDs, we prepare labels for them.
+                    for idx in actual_topic_ids_from_model_training:
+                        if idx not in st.session_state["topic_labels"]:
+                            st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
+                    
+                    # Now display using the actual IDs and their (potentially customized) labels
                     for idx in actual_topic_ids_from_model_training:
                         words = ", ".join([w for w, p in lda_model.show_topic(idx, topn=30)]) # Use show_topic for a specific index
                         current_display_label = st.session_state["topic_labels"].get(idx, f"Topic {idx+1}")
@@ -350,7 +353,8 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     st.subheader("Raw LDA Topics for Expert Review")
                     f = io.StringIO()
                     with redirect_stdout(f):
-                        pprint(lda_model.print_topics(num_topics=num_topics, num_words=30))
+                        # Ensure pprint also uses the correct num_topics
+                        pprint(lda_model.print_topics(num_topics=st.session_state["num_topics"], num_words=30))
                     s = f.getvalue()
                     st.code(s)
 
@@ -361,14 +365,16 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 with st.form("topic_label_form"):
                     # Get the actual topic IDs from the currently trained model for consistent labeling
                     # This ensures the input fields match the topics generated by the model.
+                    # This list will contain exactly 'num_topics' elements.
                     current_model_topic_ids = [topic[0] for topic in st.session_state["lda_model"].show_topics(num_topics=st.session_state["num_topics"], formatted=False)]
                     
                     # Update topic_labels to ensure only labels for current topics are kept
+                    # and remove any labels for topics that are no longer present (from a previous run with more topics)
                     st.session_state["topic_labels"] = {
                         k: v for k, v in st.session_state["topic_labels"].items() if k in current_model_topic_ids
                     }
                     
-                    # Ensure all current topics have a default label
+                    # Ensure all current topics have a default label if not already set
                     for i in current_model_topic_ids:
                         if i not in st.session_state["topic_labels"]:
                             st.session_state["topic_labels"][i] = f"Topic {i+1}"
@@ -406,6 +412,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                             continue
 
                         try:
+                            # Get document topics from the *currently trained* LDA model
                             topic_probs = st.session_state["lda_model"].get_document_topics(bow_for_this_doc)
                         except IndexError:
                             st.warning(f"Could not assign topic to document at index {idx} due to vocabulary mismatch. Assigning 'Unassigned'.")
@@ -423,14 +430,18 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     df_with_topics["Topic"] = full_topic_assignments
 
                     # Filter out 'Unassigned' topics and ensure only topics from the *current* model are considered
+                    # This ensures the plots only show the number of topics the model was trained with.
+                    current_valid_labels = set(st.session_state["topic_labels"].values())
                     df_for_viz = df_with_topics[
                         (df_with_topics["Topic"] != "Unassigned") & 
-                        (df_with_topics["Topic"].isin(st.session_state["topic_labels"].values()))
+                        (df_with_topics["Topic"].isin(current_valid_labels))
                     ].copy()
 
                     if not df_for_viz.empty:
                         st.subheader("📊 Topic Analysis: Document Counts per Topic")
                         plt.figure(figsize=(12, 7))
+                        # Use value_counts().index to ensure bars are ordered by frequency
+                        # This order will now only include the 'num_topics' topics.
                         sns.countplot(data=df_for_viz, x="Topic", palette="viridis", order=df_for_viz['Topic'].value_counts().index)
                         plt.title('Distribution of Documents Across Topics')
                         plt.xlabel('Topic Labels')
