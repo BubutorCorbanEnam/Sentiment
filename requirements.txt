@@ -13,4 +13,3 @@ seaborn
 networkx
 numpy
 scipy
-pprint
