@@ -361,7 +361,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 st.pyplot(ax.get_figure()) # Display the plot
                 plt.close() # Close the figure
 
-                # --- Topic Relationship Graph (Based on Sentiment Similarity using Euclidean Distance transformed to Similarity) ---
+# --- Topic Relationship Graph (Based on Sentiment Similarity using Euclidean Distance transformed to Similarity) ---
                 st.subheader("🔗 Topic Relationship Graph (Based on Sentiment Similarity)")
                 st.info("This graph visualizes the relationships between topics. A thicker connection indicates greater similarity in their sentiment profiles, calculated using Euclidean Distance transformed into a similarity score.")
 
@@ -388,7 +388,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                             topic_polarity_matrix[i][j] = similarity
                             topic_polarity_matrix[j][i] = similarity # Make matrix symmetric
 
-                    # --- START OF YOUR REQUESTED GRAPH CODE SNIPPET (Modified slightly for Streamlit display) ---
+                    # --- START OF YOUR REQUESTED GRAPH CODE SNIPPET (Modified for Streamlit display) ---
                     # Create a graph
                     G = nx.Graph()
 
@@ -396,36 +396,34 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     G.add_nodes_from(topic_names)
 
                     # Add edges to the graph based on the polarity matrix
-                    # Ensure i < j to avoid duplicate edges and self-loops in the graph
                     for i in range(len(topic_polarity_matrix)):
                         for j in range(len(topic_polarity_matrix[0])):
                             if i < j: # Prevents duplicate edges and self-loops
-                                if topic_polarity_matrix[i][j] > 0.5: # Using the threshold from your snippet
+                                if topic_polarity_matrix[i][j] > 0.5:
                                     G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
                     
-                    # If no edges were added because the threshold was too high or no similarity, inform the user
-                    if not G.edges:
-                        st.info("No strong relationships found between topics at the current similarity threshold (0.5). Try lowering the threshold if you expect connections.")
-                    else:
-                        # Set the layout of the nodes
-                        pos = nx.spring_layout(G)
+                    # The previous 'if not G.edges' check and its 'else' block are removed.
+                    # The drawing logic now executes unconditionally if df_sim_ready is not empty.
 
-                        # Draw the graph
-                        plt.figure(figsize=(12, 8)) # Set figure size for better visualization
-                        nx.draw(G, pos, with_labels=True, font_weight='bold')
+                    # Set the layout of the nodes
+                    pos = nx.spring_layout(G)
 
-                        # Set the edge labels
-                        edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
-                        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+                    # Draw the graph
+                    plt.figure(figsize=(12, 8)) # Set figure size for better visualization
+                    nx.draw(G, pos, with_labels=True, font_weight='bold')
 
-                        # Show the plot (Streamlit integration)
-                        plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add a title
-                        plt.axis('off') # Hide axes for a cleaner look
-                        plt.tight_layout() # Adjust layout
-                        st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
-                        plt.close() # Close the plot to free memory
+                    # Set the edge labels
+                    edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
+                    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+                    # Show the plot (Streamlit integration)
+                    plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add a title
+                    plt.axis('off') # Hide axes for a cleaner look
+                    plt.tight_layout() # Adjust layout
+                    st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
+                    plt.close() # Close the plot to free memory
                     # --- END OF YOUR REQUESTED GRAPH CODE SNIPPET ---
-
+                
                 # --- Interactive LDA Visualization (pyLDAvis) ---
                 st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
                 st.info("This interactive visualization helps explore topics by showing their relationships and the most relevant terms. Move the mouse over topics and words for details.")
