@@ -20,6 +20,9 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from scipy.spatial.distance import euclidean
 from pprint import pprint # Added for pretty printing LDA topics
+from pprint import pprint
+import io # <-- ENSURE THIS LINE IS PRESENT
+from contextlib import redirect_stdout # <-- ENSURE THIS LINE IS PRESENT
 import seaborn as sns
 
 # --- Setup ---
