@@ -19,6 +19,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import networkx as nx
 from scipy.spatial.distance import euclidean
+from pprint import pprint # Added for pretty printing LDA topics
 import seaborn as sns
 
 # --- Setup ---
