@@ -48,6 +48,7 @@ nltk.download('wordnet')
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
+
 # --- Functions ---
 def clean_text(text):
     text = str(text).lower()
@@ -107,6 +108,8 @@ if "id2word" not in st.session_state:
     st.session_state["id2word"] = None
 if "num_topics" not in st.session_state:
     st.session_state["num_topics"] = 5
+if "topic_assignments" not in st.session_state:
+    st.session_state["topic_assignments"] = None
 
 # --- Upload ---
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
@@ -187,7 +190,7 @@ if st.session_state["sentiment_df"] is not None:
     st.session_state["id2word"] = id2word
     st.session_state["corpus"] = corpus
 
-    num_topics = st.slider("Select Number of Topics", 3, 20, 5)
+    num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"])
     st.session_state["num_topics"] = num_topics
 
     if st.button("🚀 Run LDA"):
@@ -199,96 +202,130 @@ if st.session_state["sentiment_df"] is not None:
             words = ", ".join([w for w, p in topic])
             st.write(f"**Topic {idx+1}:** {words}")
 
-    # --- Manual Topic Assignment ---
-    if st.session_state["lda_model"]:
-        st.markdown("---")
-        st.subheader("📝 Assign Custom Labels to Topics")
+# --- Manual Topic Assignment ---
+if st.session_state["lda_model"]:
+    st.markdown("---")
+    st.subheader("📝 Assign Custom Labels to Topics")
 
-        with st.form("topic_label_form"):
-            for i in range(num_topics):
-                default_label = st.session_state["topic_labels"].get(i, f"Topic {i+1}")
-                new_label = st.text_input(f"Label for Topic {i+1}", value=default_label, key=f"topic_input_{i}")
-                st.session_state["topic_labels"][i] = new_label
-            submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
+    with st.form("topic_label_form"):
+        for i in range(st.session_state["num_topics"]):
+            default_label = st.session_state["topic_labels"].get(i, f"Topic {i+1}")
+            new_label = st.text_input(f"Label for Topic {i+1}", value=default_label, key=f"topic_input_{i}")
+            st.session_state["topic_labels"][i] = new_label
+        submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
 
-        if submit_labels:
-            topic_assignments = []
-            for bow in corpus:
-                if not bow:
-                    topic_assignments.append("Unassigned")
-                    continue
-                topic_probs = st.session_state["lda_model"].get_document_topics(bow)
-                if topic_probs:
-                    assigned_topic = max(topic_probs, key=lambda x: x[1])[0]
-                    label = st.session_state["topic_labels"].get(assigned_topic, f"Topic {assigned_topic+1}")
-                    topic_assignments.append(label)
-                else:
-                    topic_assignments.append("Unassigned")
+    if submit_labels:
+        # Assign topics to each cleaned comment
+        topic_assignments = []
+        for bow in corpus:
+            topic_probs = st.session_state["lda_model"].get_document_topics(bow)
+            if topic_probs:
+                assigned_topic = max(topic_probs, key=lambda x: x[1])[0]
+                label = st.session_state["topic_labels"].get(assigned_topic, f"Topic {assigned_topic+1}")
+                topic_assignments.append(label)
+            else:
+                topic_assignments.append("Unassigned")
 
-            non_empty_mask = st.session_state["sentiment_df"]["Cleaned"].notnull()
-            st.session_state["sentiment_df"].loc[non_empty_mask, "Topic"] = topic_assignments
+        # Assign topics only to valid cleaned text rows
+        non_empty_mask = st.session_state["sentiment_df"]["Cleaned"].notnull()
+        st.session_state["sentiment_df"].loc[non_empty_mask, "Topic"] = topic_assignments
 
-            st.success("Custom topics assigned successfully.")
+        st.success("Custom topics assigned successfully.")
 
-            df_1 = st.session_state["sentiment_df"].copy()
+        st.dataframe(st.session_state["sentiment_df"])
 
-            # --- Topic Analysis ---
-            st.subheader("📊 Topic Analysis Based on Manual Labels")
-            plt.figure(figsize=(15,10))
-            sns.barplot(x=df_1['Topic'].value_counts().index,
-                        y=df_1['Topic'].value_counts().values,
-                        palette=sns.color_palette('flare'))
-            plt.title('Topic Analysis (Manual Labels)')
-            plt.xlabel('Manual Topic Labels')
-            plt.ylabel('Counts')
-            st.pyplot(plt.gcf())
-            plt.clf()
+        df_1 = st.session_state["sentiment_df"].copy()
 
-            # --- Topic Polarity Distribution ---
-            st.subheader("📊 Topic Polarity Distribution (Manual Labels)")
-            df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
-            polarity_map = {"😠 Negative": "Negative", "😐 Neutral": "Neutral", "😊 Positive": "Positive"}
-            df_topic_polarity.rename(columns=polarity_map, inplace=True)
+        # --- Topic Analysis Based on Manual Labels ---
+        st.subheader("📊 Topic Analysis Based on Manual Labels")
 
-            colors = ['red' if col == 'Negative' else 'yellow' if col == 'Neutral' else 'green' for col in df_topic_polarity.columns]
+        plt.figure(figsize=(15,10))
+        plt.title('Topic Analysis')
+        plt.xlabel('Topic')
+        plt.ylabel('Counts')
+        sns.barplot(
+            x=df_1['Topic'].value_counts().index,
+            y=df_1['Topic'].value_counts().values,
+            palette=sns.color_palette('flare')
+        )
+        st.pyplot(plt.gcf())
+        plt.clf()
 
-            ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(15, 10))
-            ax.set_xlabel('Manual Topic Labels')
-            ax.set_ylabel('% Polarity')
-            ax.set_title('Topic Polarity Distribution (Manual Labels)')
-            st.pyplot(ax.get_figure())
-            plt.clf()
+        # --- Topic Polarity Distribution (Manual Labels) ---
+        st.subheader("📊 Topic Polarity Distribution (Manual Labels)")
 
-            # --- Topic Relationship Graph ---
-            st.subheader("🔗 Topic Relationship Graph (Manual Labels)")
-            topic_names = list(df_1['Topic'].unique())
-            df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
-            df_topic_sentiment = df_topic_sentiment.loc[topic_names]
+        df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0)
+        df_topic_polarity = df_topic_polarity.apply(lambda x: x / x.sum() * 100, axis=1)
 
-            topic_polarity_matrix = cosine_similarity(df_topic_sentiment.values)
-            np.fill_diagonal(topic_polarity_matrix, 0)
+        polarity_map = {
+            "😠 Negative": "Negative",
+            "😐 Neutral": "Neutral",
+            "😊 Positive": "Positive"
+        }
+        df_topic_polarity.rename(columns=polarity_map, inplace=True)
 
-            G = nx.Graph()
-            G.add_nodes_from(topic_names)
+        color_mapping = {
+            'Negative': 'red',
+            'Neutral': 'yellow',
+            'Positive': 'green'
+        }
+        colors = [color_mapping.get(col, 'gray') for col in df_topic_polarity.columns]
 
-            for i in range(len(topic_polarity_matrix)):
-                for j in range(len(topic_polarity_matrix[0])):
-                    if topic_polarity_matrix[i][j] > 0.5:
-                        G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
+        ax = df_topic_polarity.plot(
+            kind='bar',
+            color=colors,
+            stacked=True,
+            figsize=(15, 10)
+        )
+        ax.set_xlabel('Topic')
+        ax.set_ylabel('% Polarity')
+        ax.set_title('Topic Polarity Distribution')
+        ax.set_xticklabels(df_topic_polarity.index, rotation=90)
+        ax.legend(title='Polarity')
+        st.pyplot(ax.get_figure())
+        plt.clf()
 
-            pos = nx.spring_layout(G, seed=42)
-            plt.figure(figsize=(12, 8))
-            nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
-            edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
-            st.pyplot(plt.gcf())
-            plt.clf()
+        # --- Topic Relationship Graph (Manual Topic Names) ---
+        st.subheader("🔗 Topic Relationship Graph (Manual Topic Names)")
 
-            # --- LDA Visualization ---
-            st.subheader("📈 Interactive LDA Visualization")
-            vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
-            html_string = pyLDAvis.prepared_data_to_html(vis)
-            st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+        topic_names = list(df_1['Topic'].unique())
+
+        # Calculate sentiment proportions per topic
+        df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
+        df_topic_sentiment = df_topic_sentiment.loc[topic_names]
+
+        # Compute correlation matrix as polarity matrix
+        topic_polarity_matrix = df_topic_sentiment.T.corr().values
+
+        # Zero diagonal to avoid self loops
+        np.fill_diagonal(topic_polarity_matrix, 0)
+
+        # Create graph
+        G = nx.Graph()
+        G.add_nodes_from(topic_names)
+
+        # Add edges for weights > 0.5 threshold
+        for i in range(len(topic_polarity_matrix)):
+            for j in range(len(topic_polarity_matrix[0])):
+                if topic_polarity_matrix[i][j] > 0.5:
+                    G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
+
+        # Set layout and draw graph
+        pos = nx.spring_layout(G, seed=42)
+        nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
+
+        # Draw edge labels (weights)
+        edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+        st.pyplot(plt.gcf())
+        plt.clf()
+
+        # --- Interactive LDA Visualization ---
+        st.subheader("📈 Interactive LDA Visualization")
+        vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
+        html_string = pyLDAvis.prepared_data_to_html(vis)
+        st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
 
 else:
     st.info("Upload data and run sentiment analysis first to enable topic modeling.")
