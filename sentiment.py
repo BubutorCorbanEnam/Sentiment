@@ -195,8 +195,10 @@ if uploaded_file:
                     results = []
                     # Iterate through each comment in the selected column, dropping any NaN values
                     for comment_original in df[selected_col].dropna():
-                        cleaned_comment = clean_text(comment_original)
-                        polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned_comment)
+                        # Sentiment analysis is now performed on the ORIGINAL comment
+                        polarity, subjectivity, sentiment, opinion = analyze_sentiment(comment_original)
+                        # The text for LDA is still cleaned separately
+                        cleaned_comment = clean_text(comment_original) 
                         results.append({
                             "Original": comment_original,
                             "Cleaned": cleaned_comment, # Store cleaned text for LDA
@@ -283,8 +285,6 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
             st.subheader("Raw LDA Topics for Expert Review")
             
             # Capture the output of pprint to a string
-            import io
-            from contextlib import redirect_stdout
             f = io.StringIO()
             with redirect_stdout(f):
                 pprint(lda_model.print_topics(num_topics=num_topics, num_words=30)) # Ensure num_topics and num_words match
