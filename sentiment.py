@@ -97,7 +97,7 @@ def clean_text(text):
     text = str(text).lower()
     text = re.sub(r"http\S+|www\S+", "", text)  # Remove URLs
     text = re.sub(r"@\w+|#\w+", "", text)      # Remove mentions and hashtags
-    text = re.sub(r"[^a-z\s]", "", text)       # Remove non-alphabetic characters
+    text = re.sub(r"[^a-z\s]", "", text)      # Remove non-alphabetic characters
     
     tokens = word_tokenize(text)
     # Filter out stopwords and single-character tokens, then lemmatize
@@ -139,8 +139,8 @@ def train_gensim_lda_model(_corpus, _id2word, _num_topics):
             id2word=_id2word,
             num_topics=_num_topics,
             random_state=50, # Set for reproducibility of results
-            passes=10,        # Number of passes through the corpus during training
-            iterations=50,    # Number of iterations for each document
+            passes=10,         # Number of passes through the corpus during training
+            iterations=50,     # Number of iterations for each document
             per_word_topics=True # Keep track of per-word topic probabilities
         )
     return lda_model
@@ -277,6 +277,11 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 # Initialize topic label if not already set for a new topic
                 if idx not in st.session_state["topic_labels"]:
                     st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
+            
+            # --- Added pprint for detailed topic display ---
+            st.subheader("Raw LDA Topics for Expert Review")
+            st.code(pprint(lda_model.print_topics())) # Display raw topic output using st.code
+            # --- End of added pprint ---
 
     # Section for assigning custom labels and performing further analysis, only if LDA model is trained
     if st.session_state["lda_model"]:
@@ -289,7 +294,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 # Retrieve current label from session state or use default 'Topic X'
                 current_label = st.session_state["topic_labels"].get(i, f"Topic {i+1}")
                 new_label = st.text_input(f"Label for Topic {i+1} (e.g., 'Student Support', 'Course Content')",
-                                          value=current_label, key=f"topic_input_{i}")
+                                         value=current_label, key=f"topic_input_{i}")
                 st.session_state["topic_labels"][i] = new_label # Update label in session state
             
             submit_labels = st.form_submit_button("✔️ Apply Topic Labels and Analyze")
@@ -467,7 +472,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     plt.tight_layout()
                     st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
                     plt.close() # Close the plot to free memory
-                    # --- END OF REWRITTEN NETWORKX GRAPH CODE ---                
+                    # --- END OF REWRITTEN NETWORKX GRAPH CODE ---             
                 # --- Interactive LDA Visualization (pyLDAvis) ---
                 st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
                 st.info("This interactive visualization helps explore topics by showing their relationships and the most relevant terms. Move the mouse over topics and words for details.")
