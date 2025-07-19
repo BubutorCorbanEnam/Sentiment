@@ -360,9 +360,9 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 st.pyplot(ax.get_figure()) # Display the plot
                 plt.close() # Close the figure
 
-                # --- Topic Relationship Graph (Based on Sentiment Similarity using Cosine Similarity) ---
+                # --- Topic Relationship Graph (Based on Sentiment Similarity using Euclidean Distance transformed to Similarity) ---
                 st.subheader("🔗 Topic Relationship Graph (Based on Sentiment Similarity)")
-                st.info("This graph visualizes the relationships between topics. A thicker connection indicates greater similarity in their sentiment profiles, calculated using Cosine Similarity.")
+                st.info("This graph visualizes the relationships between topics. A thicker connection indicates greater similarity in their sentiment profiles, calculated using Euclidean Distance transformed into a similarity score.")
 
                 df_sim_ready = df_topic_polarity.fillna(0) # Fill any potential NaNs with 0 before similarity calculation
                 
@@ -371,11 +371,23 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 else:
                     topic_names = df_sim_ready.index.tolist()
                     
-                    # Compute cosine similarity between rows (topics) to create topic_polarity_matrix
-                    topic_polarity_matrix = cosine_similarity(df_sim_ready.values)
-                    np.fill_diagonal(topic_polarity_matrix, 0) # A topic is perfectly similar to itself, set to 0 to avoid self-loops
+                    # Calculate similarities using Euclidean distance and convert to a similarity score
+                    # A smaller Euclidean distance means higher similarity.
+                    # We convert distance to similarity using 1 / (1 + distance) to get values between 0 and 1.
+                    topic_polarity_matrix = np.zeros((len(topic_names), len(topic_names)))
+                    
+                    for i in range(len(topic_names)):
+                        for j in range(i + 1, len(topic_names)): # Iterate over unique pairs
+                            # Ensure both profiles are 1D arrays for euclidean distance
+                            profile_i = df_sim_ready.iloc[i].values.flatten()
+                            profile_j = df_sim_ready.iloc[j].values.flatten()
 
-                    # --- START OF YOUR REQUESTED GRAPH CODE SNIPPET ---
+                            dist = euclidean(profile_i, profile_j)
+                            similarity = 1 / (1 + dist) # Transform distance to similarity (0 to 1)
+                            topic_polarity_matrix[i][j] = similarity
+                            topic_polarity_matrix[j][i] = similarity # Make matrix symmetric
+
+                    # --- START OF YOUR REQUESTED GRAPH CODE SNIPPET (Modified slightly for Streamlit display) ---
                     # Create a graph
                     G = nx.Graph()
 
@@ -383,11 +395,10 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     G.add_nodes_from(topic_names)
 
                     # Add edges to the graph based on the polarity matrix
-                    # The threshold 0.5 is from your snippet.
-                    # We ensure i < j to avoid duplicate edges and self-loops.
+                    # Ensure i < j to avoid duplicate edges and self-loops in the graph
                     for i in range(len(topic_polarity_matrix)):
                         for j in range(len(topic_polarity_matrix[0])):
-                            if i < j: # Only add each edge once
+                            if i < j: # Prevents duplicate edges and self-loops
                                 if topic_polarity_matrix[i][j] > 0.5:
                                     G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
                     
@@ -396,7 +407,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                         st.info("No strong relationships found between topics at the current similarity threshold (0.5). Try lowering the threshold if you expect connections.")
                     else:
                         # Set the layout of the nodes
-                        pos = nx.spring_layout(G) # Using default spring layout as in your snippet
+                        pos = nx.spring_layout(G)
 
                         # Draw the graph
                         plt.figure(figsize=(12, 8)) # Set figure size for better visualization
@@ -407,7 +418,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
 
                         # Show the plot (Streamlit integration)
-                        plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add title
+                        plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add a title
                         plt.axis('off') # Hide axes for a cleaner look
                         plt.tight_layout() # Adjust layout
                         st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
