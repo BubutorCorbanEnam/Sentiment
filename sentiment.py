@@ -271,11 +271,9 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
             st.success("LDA model training complete!")
 
             st.subheader("🔑 Top Words per Topic (from LDA Model)")
-            # --- START OF MODIFIED SECTION FOR DISPLAYING TOPICS WITH pprint ---
+            # Display topics cleanly by parsing the raw output from lda_model.print_topics()
             topic_words_raw = lda_model.print_topics(num_topics=num_topics, num_words=30)
             
-            # Print topics cleanly by parsing the raw output, which is more user-friendly
-            # than a direct pprint of the list of tuples.
             for idx, topic_info in topic_words_raw:
                 # The topic_info string looks like '0.050*"word1" + 0.030*"word2"'
                 # We extract just the words for a cleaner display
@@ -286,7 +284,6 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 # Initialize topic label if not already set for a new topic
                 if idx not in st.session_state["topic_labels"]:
                     st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
-            # --- END OF MODIFIED SECTION FOR DISPLAYING TOPICS WITH pprint ---
 
     # Section for assigning custom labels and performing further analysis, only if LDA model is trained
     if st.session_state["lda_model"]:
@@ -446,28 +443,25 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                                 if topic_polarity_matrix[i][j] > 0.5: # Using the threshold from your snippet
                                     G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
                     
-                    # If no edges were added because the threshold was too high or no similarity, inform the user
-                    # This check is now here, after attempting to add edges.
-                    if not G.edges:
-                        st.info("No strong relationships found between topics at the current similarity threshold (0.5). Try lowering the threshold if you expect connections.")
-                    else:
-                        # Set the layout of the nodes
-                        pos = nx.spring_layout(G)
+                    # The 'if not G.edges' check is REMOVED to ensure the graph always attempts to draw.
 
-                        # Draw the graph
-                        plt.figure(figsize=(12, 8)) # Set figure size for better visualization
-                        nx.draw(G, pos, with_labels=True, font_weight='bold')
+                    # Set the layout of the nodes
+                    pos = nx.spring_layout(G)
 
-                        # Set the edge labels
-                        edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
-                        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+                    # Draw the graph
+                    plt.figure(figsize=(12, 8)) # Set figure size for better visualization
+                    nx.draw(G, pos, with_labels=True, font_weight='bold')
 
-                        # Show the plot (Streamlit integration)
-                        plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add a title
-                        plt.axis('off') # Hide axes for a cleaner look
-                        plt.tight_layout() # Adjust layout
-                        st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
-                        plt.close() # Close the plot to free memory
+                    # Set the edge labels
+                    edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
+                    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+                    # Show the plot (Streamlit integration)
+                    plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add a title
+                    plt.axis('off') # Hide axes for a cleaner look
+                    plt.tight_layout() # Adjust layout
+                    st.pyplot(plt.gcf()) # Use st.pyplot for Streamlit
+                    plt.close() # Close the plot to free memory
                     # --- END OF YOUR REQUESTED GRAPH CODE SNIPPET ---
 
                 # --- Interactive LDA Visualization (pyLDAvis) ---
