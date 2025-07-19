@@ -313,17 +313,24 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
             st.session_state["corpus"] = corpus
 
             # Get the number of topics from the slider
-            num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"], key="num_topics_slider")
+            num_topics_from_slider = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"], key="num_topics_slider")
             
             # --- MODIFICATION START (Ensuring consistency with num_topics) ---
-            # Reset topic_labels and invalidate model if the number of topics changes
-            # This is crucial for dynamic behavior.
-            if num_topics != st.session_state["num_topics"]:
+            # Check if the slider value has changed from the last recorded session state value
+            if num_topics_from_slider != st.session_state["num_topics"]:
+                # If it has changed, update the session state and clear related cached items
+                st.session_state["num_topics"] = num_topics_from_slider
                 st.session_state["topic_labels"] = {} # Clear old labels
                 st.session_state["lda_model"] = None # Invalidate existing model to force retraining
-            st.session_state["num_topics"] = num_topics # Update session state with the selected number
 
+                # Clear the cache for the train_gensim_lda_model function
+                # This is the most direct way to ensure the cached model is re-generated.
+                train_gensim_lda_model.clear() 
+                st.rerun() # Rerun the app to reflect the cleared state and prompt user
+            
             # Add an info message to guide the user to retrain the model
+            # This message will appear if the model is None (due to initial state or invalidation)
+            # or if the current model's topic count doesn't match the slider's.
             if st.session_state["lda_model"] is None:
                 st.info("Please click '🚀 Run LDA Model Training' to apply the selected number of topics.")
             elif st.session_state["lda_model"].num_topics != st.session_state["num_topics"]:
@@ -336,6 +343,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     st.error("Cannot run LDA: The corpus is empty. This usually means no meaningful text was found after preprocessing or filtering.")
                 else:
                     # Train the model with the user's selected num_topics ONLY
+                    # This call will now definitely re-run if the cache was cleared.
                     lda_model = train_gensim_lda_model(corpus, id2word, st.session_state["num_topics"])
                     st.session_state["lda_model"] = lda_model
                     st.success("LDA model training complete!")
@@ -348,9 +356,9 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     
                     # Initialize/update topic_labels with default labels for the *actual* topic IDs from the model
                     # This ensures that even if Gensim gives non-sequential IDs, we prepare labels for them.
+                    st.session_state["topic_labels"] = {} # Ensure a fresh start for labels
                     for idx in actual_topic_ids_from_model_training:
-                        if idx not in st.session_state["topic_labels"]:
-                            st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
+                        st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
                     
                     # Now display using the actual IDs and their (potentially customized) labels
                     for i, idx in enumerate(actual_topic_ids_from_model_training): # Use enumerate to get a sequential display number
