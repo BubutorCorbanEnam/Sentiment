@@ -228,30 +228,43 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
     st.markdown("---")
     st.header("📊 Sentiment Visualizations")
 
-    # --- Word Cloud ---
-    st.subheader("☁️ Word Clouds by Sentiment Type")
-    st.info("These word clouds show the most frequent words within each sentiment category (Positive, Negative, Neutral).")
-
-    sentiment_types = st.session_state["sentiment_df"]["Sentiment"].unique()
-
-    for sentiment_type in ["😊 Positive", "😠 Negative", "😐 Neutral"]: # Ensure consistent order
-        if sentiment_type in sentiment_types:
-            filtered_df = st.session_state["sentiment_df"][st.session_state["sentiment_df"]["Sentiment"] == sentiment_type]
-            all_words = ' '.join(filtered_df['Cleaned'].dropna())
+    # --- Overall Word Cloud ---
+    st.subheader("☁️ Overall Word Cloud")
+    st.info("This word cloud shows the most frequent words across all cleaned text data, providing a quick visual summary of common terms.")
+    
+    all_words = ' '.join(st.session_state["sentiment_df"]['Cleaned'].dropna())
+    
+    if all_words.strip():  # Check if all_words is not just whitespace
+        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(all_words)
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis('off')
+        ax.set_title('Overall Word Cloud')
+        st.pyplot(fig)
+        plt.close(fig) # Close the figure to free memory
+    else:
+        st.warning("No meaningful cleaned text to generate the Overall Word Cloud.")
             
-            if all_words.strip():
-                wordcloud = WordCloud(width=800, height=400, background_color='white').generate(all_words)
-                
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.imshow(wordcloud, interpolation='bilinear')
-                ax.axis('off')
-                ax.set_title(f'Word Cloud for {sentiment_type} Sentiment')
-                st.pyplot(fig)
-                plt.close(fig) # Close the figure to free memory
-            else:
-                st.warning(f"No meaningful cleaned text found for {sentiment_type} sentiment to generate a word cloud.")
-        else:
-            st.info(f"No '{sentiment_type}' sentiments found in the dataset.")
+    st.markdown("---")
+
+    # --- Sentiment Distribution Bar Plot ---
+    st.subheader("📊 Overall Sentiment Distribution")
+    st.info("This bar chart shows the total count of comments classified as Positive, Neutral, or Negative.")
+
+    sentiment_counts = st.session_state["sentiment_df"]["Sentiment"].value_counts().reindex(["😊 Positive", "😐 Neutral", "😠 Negative"], fill_value=0)
+
+    # Define colors for the bars
+    bar_colors = ["green", "orange", "red"]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    sentiment_counts.plot(kind='bar', ax=ax, color=bar_colors)
+    ax.set_title('Distribution of Sentiment Types')
+    ax.set_xlabel('Sentiment Type')
+    ax.set_ylabel('Number of Comments')
+    ax.tick_params(axis='x', rotation=0) # No rotation needed for 3 bars
+    st.pyplot(fig)
+    plt.close(fig) # Close the figure to free memory
             
     st.markdown("---")
 
