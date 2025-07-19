@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 import pandas as pd
 import re
@@ -19,12 +21,12 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import networkx as nx
 from scipy.spatial.distance import euclidean
-from pprint import pprint # Added for pretty printing LDA topics
-from pprint import pprint
-import io # <-- ENSURE THIS LINE IS PRESENT
-from contextlib import redirect_stdout # <-- ENSURE THIS LINE IS PRESENT
 import seaborn as sns
+from pprint import pprint # Keep this here
 
+# Import io and redirect_stdout here, once and at the top with other imports
+import io
+from contextlib import redirect_stdout
 # --- Setup ---
 st.set_page_config(page_title="UCC Sentiment Analysis Portal", layout="centered", page_icon="💬")
 
