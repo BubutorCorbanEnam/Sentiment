@@ -383,10 +383,12 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                     G.add_nodes_from(topic_names)
 
                     # Add edges to the graph based on the polarity matrix
+                    # The threshold 0.5 is from your snippet.
+                    # We ensure i < j to avoid duplicate edges and self-loops.
                     for i in range(len(topic_polarity_matrix)):
                         for j in range(len(topic_polarity_matrix[0])):
-                            if i < j: # Ensure unique pairs and avoid self-loops if not already handled by fill_diagonal
-                                if topic_polarity_matrix[i][j] > 0.5: # Using the threshold from your snippet
+                            if i < j: # Only add each edge once
+                                if topic_polarity_matrix[i][j] > 0.5:
                                     G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
                     
                     # If no edges were added because the threshold was too high or no similarity, inform the user
@@ -404,7 +406,7 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                         edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
                         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
 
-                        # Show the plot
+                        # Show the plot (Streamlit integration)
                         plt.title('Topic Similarity Graph (Based on Sentiment Profiles)') # Add title
                         plt.axis('off') # Hide axes for a cleaner look
                         plt.tight_layout() # Adjust layout
