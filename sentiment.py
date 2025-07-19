@@ -243,6 +243,5 @@ if st.session_state["sentiment_df"] is not None:
             vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
             html_string = pyLDAvis.prepared_data_to_html(vis)
             st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
-
 else:
     st.info("Upload data and run sentiment analysis first to enable topic modeling.")
