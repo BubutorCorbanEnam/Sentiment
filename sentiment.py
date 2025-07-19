@@ -200,7 +200,7 @@ if st.session_state["sentiment_df"] is not None:
         st.session_state["lda_model"] = lda_model
 
         st.subheader("🔑 Top Words per Topic")
-        for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=10, formatted=False):
+        for idx, topic in lda_model.show_topics(num_topics=num_topics, formatted=False):
             words = ", ".join([w for w, p in topic])
             st.write(f"**Topic {idx+1}:** {words}")
 
