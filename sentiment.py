@@ -51,197 +51,366 @@ lemmatizer = WordNetLemmatizer()
 
 # --- Functions ---
 def clean_text(text):
+    """
+    Cleans the input text by:
+    - Converting to lowercase
+    - Removing URLs (http/https and www)
+    - Removing mentions (@username) and hashtags (#tag)
+    - Removing non-alphabetic characters (keeping spaces)
+    - Tokenizing the text
+    - Lemmatizing tokens
+    - Removing stopwords and single-character tokens
+    """
     text = str(text).lower()
-    text = re.sub(r"http\S+|www\S+|@\w+|#\w+|[^a-z\s]", "", text)
+    text = re.sub(r"http\S+|www\S+", "", text)  # Remove URLs
+    text = re.sub(r"@\w+|#\w+", "", text)      # Remove mentions and hashtags
+    text = re.sub(r"[^a-z\s]", "", text)       # Remove non-alphabetic characters
+    
     tokens = word_tokenize(text)
     tokens = [lemmatizer.lemmatize(w) for w in tokens if w not in stop_words and len(w) > 1]
     return " ".join(tokens)
 
 def analyze_sentiment(text):
+    """
+    Analyzes the sentiment of the given text using TextBlob.
+    Returns polarity, subjectivity, sentiment label, and opinion type.
+    """
     blob = TextBlob(text)
     polarity = round(blob.sentiment.polarity, 3)
     subjectivity = round(blob.sentiment.subjectivity, 3)
+    
     if polarity > 0:
         sentiment = "😊 Positive"
     elif polarity < 0:
         sentiment = "😠 Negative"
     else:
         sentiment = "😐 Neutral"
-    opinion = "Opinion" if subjectivity > 0 else "Fact"
+    
+    # Simplified opinion type based on subjectivity
+    opinion = "Opinion" if subjectivity > 0 else "Fact" 
     return polarity, subjectivity, sentiment, opinion
 
 @st.cache_resource(show_spinner=False)
 def train_gensim_lda_model(_corpus, _id2word, _num_topics):
+    """
+    Trains a Gensim LDA model. This function is cached to prevent re-training
+    on every Streamlit rerun, improving performance.
+    """
     lda_model = gensim.models.LdaModel(
         corpus=_corpus,
         id2word=_id2word,
         num_topics=_num_topics,
-        random_state=50,
-        passes=5,
-        iterations=50,
-        per_word_topics=True
+        random_state=50, # Set for reproducibility of results
+        passes=10,        # Number of passes through the corpus during training
+        iterations=50,    # Number of iterations for each document
+        per_word_topics=True # Keep track of per-word topic probabilities
     )
     return lda_model
 
-# --- Session State ---
+# --- Session State Initialization ---
+# Initialize Streamlit session state variables to persist data across reruns
 if "sentiment_df" not in st.session_state:
     st.session_state["sentiment_df"] = None
 if "topic_labels" not in st.session_state:
     st.session_state["topic_labels"] = {}
 if "lda_model" not in st.session_state:
     st.session_state["lda_model"] = None
-if "corpus" not in st.session_state:
+if "corpus" not in st.session_state: 
     st.session_state["corpus"] = None
 if "id2word" not in st.session_state:
     st.session_state["id2word"] = None
 if "num_topics" not in st.session_state:
-    st.session_state["num_topics"] = 5
+    st.session_state["num_topics"] = 5 # Default number of topics for slider
 
-# --- Upload ---
+# --- File Upload Section ---
 uploaded_file = st.file_uploader("📂 Upload CSV, Excel, or TXT", type=["csv", "xlsx", "xls", "txt"])
 
 if uploaded_file:
     try:
+        # Read the uploaded file based on its extension
         if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
         elif uploaded_file.name.endswith((".xlsx", ".xls")):
             df = pd.read_excel(uploaded_file)
         elif uploaded_file.name.endswith(".txt"):
+            # For TXT files, assume each line is a separate comment
             df = pd.read_csv(uploaded_file, delimiter="\n", header=None, names=["comment"])
         else:
-            st.error("Unsupported file format.")
-            st.stop()
+            st.error("Unsupported file format. Please upload a CSV, Excel, or TXT file.")
+            st.stop() # Stop execution if the file format is not recognized
 
+        st.success(f"File '{uploaded_file.name}' loaded successfully!")
+
+        # Identify and allow user to select the text column for analysis
         text_cols = df.select_dtypes(include="object").columns.tolist()
-        selected_col = st.selectbox("Select Text Column", text_cols)
+        if not text_cols:
+            st.error("No text columns found in the uploaded file. Please ensure your file contains text data.")
+            st.stop() # Stop if no text columns are found
+        selected_col = st.selectbox("Select Text Column for Sentiment Analysis", text_cols)
 
+        # Button to trigger sentiment analysis
         if st.button("🔍 Run Sentiment Analysis"):
-            results = []
-            for comment in df[selected_col].dropna():
-                cleaned = clean_text(comment)
-                polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned)
-                results.append({
-                    "Original": comment,
-                    "Cleaned": cleaned,
-                    "Polarity": polarity,
-                    "Subjectivity": subjectivity,
-                    "Sentiment": sentiment,
-                    "Type": opinion
-                })
-            sentiment_df = pd.DataFrame(results)
-            st.session_state["sentiment_df"] = sentiment_df
+            if selected_col:
+                with st.spinner("Running sentiment analysis... This may take a moment."):
+                    results = []
+                    # Iterate through each comment in the selected column (dropping NaNs)
+                    for comment_original in df[selected_col].dropna():
+                        cleaned_comment = clean_text(comment_original)
+                        polarity, subjectivity, sentiment, opinion = analyze_sentiment(cleaned_comment)
+                        results.append({
+                            "Original": comment_original,
+                            "Cleaned": cleaned_comment,
+                            "Polarity": polarity,
+                            "Subjectivity": subjectivity,
+                            "Sentiment": sentiment,
+                            "Type": opinion
+                        })
+                    sentiment_df = pd.DataFrame(results)
+                    st.session_state["sentiment_df"] = sentiment_df # Store results in session state
+                    st.success("Sentiment analysis complete!")
 
-            st.subheader("🗂️ Sentiment Analysis Results")
-            st.dataframe(sentiment_df)
+                    st.subheader("🗂️ Sentiment Analysis Results")
+                    st.dataframe(sentiment_df) # Display the sentiment analysis results
+            else:
+                st.warning("Please select a text column to run sentiment analysis.")
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"An error occurred during file processing or sentiment analysis: {e}")
+        st.stop()
 
-# --- LDA Topic Modeling ---
-if st.session_state["sentiment_df"] is not None:
+# --- LDA Topic Modeling Section ---
+# This section only becomes active if sentiment analysis has been run and results are available
+if st.session_state["sentiment_df"] is not None and not st.session_state["sentiment_df"].empty:
     st.markdown("---")
     st.header("🧠 LDA Topic Modeling (Manual Topic Assignment Supported)")
 
-    clean_comments = st.session_state["sentiment_df"]["Cleaned"].dropna().tolist()
-    processed_texts = [simple_preprocess(doc) for doc in clean_comments]
-    id2word = corpora.Dictionary(processed_texts)
-    corpus = [id2word.doc2bow(text) for text in processed_texts]
+    # Prepare data for LDA: filter out empty or whitespace-only cleaned comments
+    initial_clean_comments = st.session_state["sentiment_df"]["Cleaned"].dropna()
+    clean_comments_for_lda = [comment for comment in initial_clean_comments if comment.strip()]
 
+    if not clean_comments_for_lda:
+        st.warning("No valid cleaned text data available for Topic Modeling after filtering. Please ensure your data contains meaningful text.")
+        st.stop() # Stop if no valid data for LDA
+
+    # Process texts into tokens for Gensim LDA
+    processed_texts = [simple_preprocess(doc) for doc in clean_comments_for_lda]
+    
+    # Filter out any lists that became empty after simple_preprocess (e.g., only numbers, single chars removed)
+    final_processed_texts = [text for text in processed_texts if text]
+
+    if not final_processed_texts:
+        st.warning("No valid processed text data for Topic Modeling. This might happen if all comments consist only of stopwords or short words after preprocessing.")
+        st.stop() # Stop if no data for LDA after final processing
+
+    # Create Gensim dictionary and corpus from the final processed texts
+    id2word = corpora.Dictionary(final_processed_texts)
+    
+    # Filter out words that appear in too few (no_below) or too many (no_above) documents
+    # or are too infrequent (max_features for a vocabulary size limit)
+    # These parameters can be tuned based on dataset size and characteristics
+    id2word.filter_extremes(no_below=5, no_above=0.5) 
+    
+    corpus = [id2word.doc2bow(text) for text in final_processed_texts]
+
+    # Update session state for LDA components (used for pyLDAvis and initial topic display)
     st.session_state["id2word"] = id2word
     st.session_state["corpus"] = corpus
 
-    num_topics = st.slider("Select Number of Topics", 3, 20, 5)
-    st.session_state["num_topics"] = num_topics
+    # Slider to select the number of topics
+    num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"], key="num_topics_slider")
+    st.session_state["num_topics"] = num_topics # Update session state with selected number
 
+    # Button to run LDA model training
     if st.button("🚀 Run LDA"):
-        lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
-        st.session_state["lda_model"] = lda_model
+        if not corpus:
+            st.error("Cannot run LDA: The corpus is empty. This usually means no meaningful text was found after preprocessing.")
+        else:
+            with st.spinner(f"Training LDA model with {num_topics} topics..."):
+                lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
+                st.session_state["lda_model"] = lda_model
+                st.success("LDA model training complete!")
 
-        st.subheader("🔑 Top Words per Topic")
-        for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=30, formatted=False):
-            words = ", ".join([w for w, p in topic])
-            st.write(f"**Topic {idx+1}:** {words}")
+                st.subheader("🔑 Top Words per Topic")
+                # Display top words for each topic
+                for idx, topic in lda_model.show_topics(num_topics=num_topics, num_words=30, formatted=False):
+                    words = ", ".join([w for w, p in topic])
+                    st.write(f"**Topic {idx+1}:** {words}")
+                    # Initialize topic label if not already set for a new topic
+                    if idx not in st.session_state["topic_labels"]:
+                        st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
 
+    # Section for assigning custom labels and performing further analysis, only if LDA model is trained
     if st.session_state["lda_model"]:
         st.markdown("---")
         st.subheader("📝 Assign Custom Labels to Topics")
 
+        # Form for manual topic labeling inputs
         with st.form("topic_label_form"):
             for i in range(num_topics):
-                default_label = st.session_state["topic_labels"].get(i, f"Topic {i+1}")
-                new_label = st.text_input(f"Label for Topic {i+1}", value=default_label, key=f"topic_input_{i}")
-                st.session_state["topic_labels"][i] = new_label
-            submit_labels = st.form_submit_button("✔️ Apply Topic Labels")
+                # Retrieve current label from session state or use default
+                current_label = st.session_state["topic_labels"].get(i, f"Topic {i+1}")
+                new_label = st.text_input(f"Label for Topic {i+1} (e.g., 'Student Support', 'Course Content')",
+                                          value=current_label, key=f"topic_input_{i}")
+                st.session_state["topic_labels"][i] = new_label # Update label in session state
+            
+            submit_labels = st.form_submit_button("✔️ Apply Topic Labels and Analyze")
 
         if submit_labels:
-            df_1 = st.session_state["sentiment_df"].copy()
-            topic_assignments = []
-            for bow in corpus:
-                topic_probs = st.session_state["lda_model"].get_document_topics(bow)
+            # Create a copy of the sentiment DataFrame for adding topic assignments
+            df_with_topics = st.session_state["sentiment_df"].copy()
+            
+            # Initialize a list to store assigned topic labels for each original comment
+            # This list will be the same length as the original sentiment_df, ensuring alignment.
+            full_topic_assignments = ["Unassigned"] * len(df_with_topics)
+
+            # Iterate through each row of the original DataFrame to assign topics
+            for idx, row in df_with_topics.iterrows():
+                cleaned_text_doc = row["Cleaned"]
+                
+                # Handle cases where cleaned text is empty or NaN after preprocessing
+                if pd.isna(cleaned_text_doc) or not cleaned_text_doc.strip():
+                    full_topic_assignments[idx] = "Unassigned"
+                    continue # Skip to the next document
+
+                # Convert cleaned text to tokens using simple_preprocess
+                doc_tokens = simple_preprocess(cleaned_text_doc)
+                
+                if not doc_tokens:
+                    full_topic_assignments[idx] = "Unassigned"
+                    continue # Skip if no tokens are left after simple_preprocess
+
+                # Convert tokens to Bag-of-Words using the model's dictionary (id2word)
+                bow_for_this_doc = st.session_state["id2word"].doc2bow(doc_tokens)
+                
+                if not bow_for_this_doc:
+                    full_topic_assignments[idx] = "Unassigned"
+                    continue # Skip if BOW is empty (e.g., all words filtered out by id2word.filter_extremes)
+
+                # Get topic probabilities for the current document from the trained LDA model
+                topic_probs = st.session_state["lda_model"].get_document_topics(bow_for_this_doc)
+
                 if topic_probs:
-                    assigned_topic = max(topic_probs, key=lambda x: x[1])[0]
-                    label = st.session_state["topic_labels"].get(assigned_topic, f"Topic {assigned_topic+1}")
-                    topic_assignments.append(label)
+                    # Find the topic with the highest probability
+                    assigned_topic_id = max(topic_probs, key=lambda x: x[1])[0]
+                    # Get the custom label for this topic, or use a default if not set
+                    label = st.session_state["topic_labels"].get(assigned_topic_id, f"Topic {assigned_topic_id+1}")
+                    full_topic_assignments[idx] = label
                 else:
-                    topic_assignments.append("Unassigned")
+                    full_topic_assignments[idx] = "Unassigned" # Assign 'Unassigned' if no topic probabilities are found
 
-            df_1["Topic"] = topic_assignments
+            # Add the 'Topic' column to the DataFrame
+            df_with_topics["Topic"] = full_topic_assignments
 
-            st.subheader("📊 Topic Analysis Based on Manual Labels")
-            plt.figure(figsize=(15,10))
-            sns.countplot(data=df_1, x="Topic", palette="flare")
-            st.pyplot(plt.gcf())
-            plt.clf()
+            # Filter out 'Unassigned' topics for visualization purposes, if desired
+            df_for_viz = df_with_topics[df_with_topics["Topic"] != "Unassigned"].copy()
+            
+            if not df_for_viz.empty:
+                # --- Topic Analysis Count Plot ---
+                st.subheader("📊 Topic Analysis Based on Manual Labels")
+                plt.figure(figsize=(12, 7))
+                sns.countplot(data=df_for_viz, x="Topic", palette="viridis", order=df_for_viz['Topic'].value_counts().index)
+                plt.title('Distribution of Documents Across Topics')
+                plt.xlabel('Topic Labels')
+                plt.ylabel('Number of Documents')
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                st.pyplot(plt.gcf())
+                plt.close() # Close the figure to free memory
 
-            st.subheader("📊 Topic Polarity Distribution")
-            df_topic_polarity = df_1.groupby('Topic')['Sentiment'].value_counts().unstack(fill_value=0).apply(lambda x: x / x.sum() * 100, axis=1)
-            polarity_map = {"😠 Negative": "Negative", "😐 Neutral": "Neutral", "😊 Positive": "Positive"}
-            df_topic_polarity.rename(columns=polarity_map, inplace=True)
+                # --- Topic Polarity Distribution Stacked Bar Chart ---
+                st.subheader("📊 Topic Polarity Distribution")
+                # Group by Topic and Sentiment, then unstack and normalize to percentages
+                df_topic_polarity = df_for_viz.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack(fill_value=0)
+                
+                # Ensure all three sentiment columns exist and are in a consistent order
+                sentiment_order = ["😠 Negative", "😐 Neutral", "😊 Positive"]
+                for s_type in sentiment_order:
+                    if s_type not in df_topic_polarity.columns:
+                        df_topic_polarity[s_type] = 0.0
+                df_topic_polarity = df_topic_polarity[sentiment_order] * 100 # Convert to percentage
 
-            color_mapping = {'Negative': 'red', 'Neutral': 'yellow', 'Positive': 'green'}
-            colors = [color_mapping.get(col, 'gray') for col in df_topic_polarity.columns]
+                # Define color mapping for sentiments
+                color_mapping = {"😠 Negative": 'red', "😐 Neutral": 'orange', "😊 Positive": 'green'}
+                colors = [color_mapping[col] for col in df_topic_polarity.columns]
 
-            ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(15, 10))
-            ax.set_xlabel('Topic')
-            ax.set_ylabel('% Polarity')
-            ax.set_title('Topic Polarity Distribution')
-            ax.set_xticklabels(df_topic_polarity.index, rotation=90)
-            ax.legend(title='Polarity')
+                ax = df_topic_polarity.plot(kind='bar', color=colors, stacked=True, figsize=(12, 7))
+                ax.set_xlabel('Topic')
+                ax.set_ylabel('Percentage of Polarity (%)')
+                ax.set_title('Topic Polarity Distribution')
+                ax.set_xticklabels(df_topic_polarity.index, rotation=45, ha='right')
+                ax.legend(title='Polarity', bbox_to_anchor=(1.05, 1), loc='upper left')
+                plt.tight_layout()
+                st.pyplot(ax.get_figure())
+                plt.close()
 
-            st.pyplot(ax.get_figure())
-            plt.clf()
+                # --- Topic Relationship Graph ---
+                st.subheader("🔗 Topic Relationship Graph (Based on Sentiment Similarity)")
+                st.info("This graph visualizes the relationships between topics. A thicker or more numerous connection indicates greater similarity in their sentiment profiles.")
 
-            st.subheader("🔗 Topic Relationship Graph (Manual Topic Names)")
-            df_topic_sentiment = df_1.groupby('Topic')['Sentiment'].value_counts(normalize=True).unstack().fillna(0)
-            for col in ["😠 Negative", "😐 Neutral", "😊 Positive"]:
-                if col not in df_topic_sentiment.columns:
-                    df_topic_sentiment[col] = 0
-            df_topic_sentiment = df_topic_sentiment[["😠 Negative", "😐 Neutral", "😊 Positive"]]
+                # Calculate similarity between topics based on their normalized sentiment distributions
+                df_sim_ready = df_topic_polarity.fillna(0) # Handle any potential NaNs from previous steps
+                
+                if df_sim_ready.empty:
+                    st.warning("Cannot generate topic relationship graph: No data for sentiment similarity calculation.")
+                else:
+                    topic_names = df_sim_ready.index.tolist()
+                    
+                    # Compute cosine similarity between rows (topics)
+                    topic_polarity_matrix = cosine_similarity(df_sim_ready.values)
+                    np.fill_diagonal(topic_polarity_matrix, 0) # A topic is perfectly similar to itself, set to 0
 
-            topic_names = df_topic_sentiment.index.tolist()
-            topic_polarity_matrix = cosine_similarity(df_topic_sentiment.values)
-            np.fill_diagonal(topic_polarity_matrix, 0)
+                    G = nx.Graph()
+                    G.add_nodes_from(topic_names)
 
-            G = nx.Graph()
-            G.add_nodes_from(topic_names)
+                    similarity_threshold = 0.6 # Adjustable threshold for adding edges (connections)
+                    
+                    for i in range(len(topic_polarity_matrix)):
+                        for j in range(i + 1, len(topic_polarity_matrix)): # Iterate over unique pairs
+                            if topic_polarity_matrix[i][j] > similarity_threshold:
+                                G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
 
-            for i in range(len(topic_polarity_matrix)):
-                for j in range(len(topic_polarity_matrix[0])):
-                    if topic_polarity_matrix[i][j] > 0.5:
-                        G.add_edge(topic_names[i], topic_names[j], weight=topic_polarity_matrix[i][j])
+                    if G.edges: # Only draw if there are connections to visualize
+                        pos = nx.spring_layout(G, k=0.8, iterations=50, seed=42) # k for spacing, iterations for stability, seed for reproducibility
+                        plt.figure(figsize=(12, 8))
+                        
+                        # Draw nodes and labels
+                        nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=2000, alpha=0.9)
+                        nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
 
-            pos = nx.spring_layout(G)
-            plt.figure(figsize=(12,8))
-            nx.draw(G, pos, with_labels=True, font_weight='bold', node_color='lightblue', node_size=1500, edge_color='gray')
-            edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
-            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+                        # Draw edges with varying thickness based on weight
+                        edge_widths = [d['weight'] * 5 for u, v, d in G.edges(data=True)] # Scale width for visibility
+                        nx.draw_networkx_edges(G, pos, width=edge_widths, alpha=0.7, edge_color='darkgray')
+                        
+                        # Add edge labels (similarity scores)
+                        edge_labels = {(u, v): f'{d["weight"]:.2f}' for u, v, d in G.edges(data=True)}
+                        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=9)
 
-            st.pyplot(plt.gcf())
-            plt.clf()
+                        plt.title('Topic Similarity Graph (Based on Sentiment Profiles)')
+                        plt.axis('off') # Hide axes for a cleaner graph appearance
+                        plt.tight_layout()
+                        st.pyplot(plt.gcf())
+                        plt.close()
+                    else:
+                        st.info("No strong relationships found between topics at the current similarity threshold. Try adjusting the threshold or number of topics.")
 
-            st.subheader("📈 Interactive LDA Visualization")
-            vis = gensimvis.prepare(st.session_state["lda_model"], corpus, id2word)
-            html_string = pyLDAvis.prepared_data_to_html(vis)
-            st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+                # --- Interactive LDA Visualization (pyLDAvis) ---
+                st.subheader("📈 Interactive LDA Visualization (pyLDAvis)")
+                st.info("This interactive visualization helps explore topics by showing their relationships and the most relevant terms. Move the mouse over topics and words.")
+                
+                # Check if LDA model and its components are available before preparing visualization
+                if st.session_state["lda_model"] and st.session_state["corpus"] and st.session_state["id2word"]:
+                    try:
+                        # pyLDAvis preparation
+                        vis = gensimvis.prepare(st.session_state["lda_model"], st.session_state["corpus"], st.session_state["id2word"], mds='mmds')
+                        html_string = pyLDAvis.prepared_data_to_html(vis)
+                        st.components.v1.html(html_string, width=1000, height=800, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Error generating interactive LDA visualization: {e}. This can happen if the model or data is not suitable for visualization (e.g., too few topics or documents).")
+                else:
+                    st.warning("LDA model or its components are not ready for interactive visualization. Please run LDA training first.")
+            else:
+                st.warning("No data available for topic analysis after filtering. Please ensure your original data has comments that can be assigned to topics.")
+    else:
+        st.info("Run LDA first to assign custom labels and view analysis.")
 else:
     st.info("Upload data and run sentiment analysis first to enable topic modeling.")
