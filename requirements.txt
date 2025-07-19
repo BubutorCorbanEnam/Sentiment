@@ -12,3 +12,4 @@ openpyxl
 seaborn
 networkx
 numpy
+scipy
