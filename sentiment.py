@@ -38,10 +38,41 @@ st.markdown("---")
 # --- About ---
 with st.expander("ℹ️ About this App"):
     st.markdown("""
-    Built by Bubutor Corban Enam after participating in an NLP training session organized by Professor Andy.
-    This app allows users to analyze sentiment and discover topics in text data via LDA.
-    """)
+    This **AI & Data Science | Sentiment Analysis Web App** is a specialized tool designed for in-depth text analysis. Built by Bubutor Corban Enam following an enriching NLP training session organized by Professor Andy, its primary goal is to empower users with robust capabilities in **sentiment analysis** and **topic discovery**.
 
+    ---
+
+    ### Core Functionality
+
+    The application offers a streamlined workflow for understanding textual data:
+
+    * **File Upload**: Users can easily upload their text datasets in common formats like CSV, Excel, or plain TXT files.
+    * **Text Preprocessing**: Before analysis, the app intelligently cleans the text data. This involves converting text to lowercase, removing URLs, mentions (`@username`), hashtags (`#hashtags`), and non-alphabetic characters. It then tokenizes the text, removes common **stopwords** (e.g., "the", "is"), and performs **lemmatization** (reducing words to their base form, e.g., "running" to "run") to standardize the vocabulary.
+    * **Sentiment Analysis**: Leveraging the **TextBlob** library, the app quantifies the emotional tone of each piece of text. It provides:
+        * **Polarity**: A score ranging from -1 (most negative) to +1 (most positive).
+        * **Subjectivity**: A score from 0 (very objective/factual) to 1 (very subjective/opinionated).
+        * **Categorical Sentiment**: Labels like "😊 Positive", "😠 Negative", or "😐 Neutral" for easy interpretation.
+        * **Opinion Type**: Differentiates between "Opinion" and "Fact" based on subjectivity.
+    * **Topic Modeling with LDA**: The app utilizes **Latent Dirichlet Allocation (LDA)**, a powerful unsupervised machine learning technique from the **Gensim** library, to identify hidden thematic structures (topics) within your text data. Users can select the desired number of topics, and the app will display the most prominent words associated with each.
+    * **Custom Topic Labeling**: To enhance interpretability, users can assign their own meaningful names to the automatically identified topics, making the results more relevant to their specific domain or research.
+
+    ---
+
+    ### Data Visualization & Insights
+
+    Beyond raw data, the app provides intuitive visualizations for a deeper understanding:
+
+    * **Sentiment Analysis Results Table**: A comprehensive table displaying original text, cleaned text, and their respective sentiment metrics.
+    * **Topic Analysis Plots**:
+        * **Document Counts per Topic**: Bar charts illustrating the distribution of documents across the identified topics.
+        * **Topic Polarity Distribution**: Stacked bar charts showing the percentage of positive, negative, and neutral sentiments within each specific topic, allowing for a granular view of sentiment by theme.
+    * **Topic Relationship Graph**: This **NetworkX** graph visually represents the relationships between topics. Connections (edges) are drawn between topics, with their **thickness proportional to the similarity of their sentiment profiles**. This helps identify how different themes in your data are emotionally related. The similarity is calculated using **Euclidean distance** between the sentiment percentage profiles of each topic, transformed into a similarity score.
+    * **Interactive LDA Visualization (pyLDAvis)**: An advanced interactive visualization that allows users to explore topics by showing their inter-topic distances and the most relevant terms within each, providing a highly navigable interface for topic interpretation.
+
+    ---
+
+    This application serves as a valuable resource for researchers, analysts, and anyone looking to extract meaningful sentiment and thematic insights from large volumes of text data.
+    """)
 # --- NLTK Setup ---
 nltk.download('punkt_tab')
 nltk.download('stopwords')
