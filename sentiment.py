@@ -279,10 +279,19 @@ if st.session_state["sentiment_df"] is not None and not st.session_state["sentim
                 if idx not in st.session_state["topic_labels"]:
                     st.session_state["topic_labels"][idx] = f"Topic {idx+1}"
             
-            # --- Added pprint for detailed topic display ---
+            # --- MODIFIED SECTION FOR pprint DISPLAY ---
             st.subheader("Raw LDA Topics for Expert Review")
-            st.code(pprint(lda_model.print_topics())) # Display raw topic output using st.code
-            # --- End of added pprint ---
+            
+            # Capture the output of pprint to a string
+            import io
+            from contextlib import redirect_stdout
+            f = io.StringIO()
+            with redirect_stdout(f):
+                pprint(lda_model.print_topics(num_topics=num_topics, num_words=30)) # Ensure num_topics and num_words match
+            s = f.getvalue()
+            
+            st.code(s) # Display the captured string using st.code
+            # --- END OF MODIFIED SECTION ---
 
     # Section for assigning custom labels and performing further analysis, only if LDA model is trained
     if st.session_state["lda_model"]:
