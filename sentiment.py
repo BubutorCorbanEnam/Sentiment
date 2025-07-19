@@ -190,8 +190,10 @@ if st.session_state["sentiment_df"] is not None:
     st.session_state["id2word"] = id2word
     st.session_state["corpus"] = corpus
 
-    num_topics = st.slider("Select Number of Topics", 3, 20, st.session_state["num_topics"])
-    st.session_state["num_topics"] = num_topics
+    num_topics = st.slider("Select Number of Topics", 3, 20, value=st.session_state["num_topics"])
+
+    if num_topics != st.session_state["num_topics"]:
+        st.session_state["num_topics"] = num_topics
 
     if st.button("🚀 Run LDA"):
         lda_model = train_gensim_lda_model(corpus, id2word, num_topics)
